@@ -1,0 +1,475 @@
+<html>
+<head>
+
+<script src="lib/wad.min.js"></script>
+<script src="lib/jquery-2.2.0.min.js"></script>
+<script src="lib/underscore-min.js"></script>
+<script>
+$(function(){
+
+	var transpose = 36;
+	var timeout;
+
+	// var synth = T("OscGen", {wave:"sin", mul:0.25}).play();
+
+	var wad_1_soft_sine = new Wad({
+		source : 'sine',
+		volume: 0.42,
+		env: {
+			attack: 0.01,
+			decay: 0.1,
+			sustain: 0.4,
+			hold: 32,
+			release: 0.15
+		},
+		filter: {
+			type: 'lowpass',
+			frequency: 6,
+			q: 0.7,
+			env: {
+				frequency: 2000,
+				attack: 3
+			}
+		}
+	});
+
+	var wad_2_hard_sine = new Wad({
+		source : 'sine',
+		volume: 0.66,
+		env: {
+			attack: 0.005,
+			decay: 0.2,
+			sustain: 0,
+			hold: 0,
+			release: 0.05
+		}
+	});
+
+	var wad_synth = new Wad.Poly();
+
+	wad_synth.add(wad_2_hard_sine).add(wad_1_soft_sine);
+	
+	var mapping = {
+
+		'1' : {code: 49, x: 1, y: 4, chr:  '1', note: 'E 3', black: false},
+		'2' : {code: 50, x: 2, y: 4, chr:  '2', note: 'G#3', black: true },
+		'3' : {code: 51, x: 3, y: 4, chr:  '3', note: 'C 4', black: false},
+		'4' : {code: 52, x: 4, y: 4, chr:  '4', note: 'E 4', black: false},
+		'5' : {code: 53, x: 5, y: 4, chr:  '5', note: 'G#4', black: true },
+		'6' : {code: 54, x: 6, y: 4, chr:  '6', note: 'C 5', black: false},
+		'7' : {code: 55, x: 7, y: 4, chr:  '7', note: 'E 5', black: false},
+		'8' : {code: 56, x: 8, y: 4, chr:  '8', note: 'G#5', black: true },
+		'9' : {code: 57, x: 9, y: 4, chr:  '9', note: 'C 6', black: false},
+		'0' : {code: 48, x:10, y: 4, chr:  '0', note: 'E 6', black: false},
+   
+		'q' : {code: 81, x: 1, y: 3, chr:  'Q', note: 'C#3', black: true },
+		'w' : {code: 87, x: 2, y: 3, chr:  'W', note: 'F 3', black: false},
+		'e' : {code: 69, x: 3, y: 3, chr:  'E', note: 'A 3', black: false},
+		'r' : {code: 82, x: 4, y: 3, chr:  'R', note: 'C#4', black: true },
+		't' : {code: 84, x: 5, y: 3, chr:  'T', note: 'F 4', black: false},
+		'y' : {code: 89, x: 6, y: 3, chr:  'Y', note: 'A 4', black: false},
+		'u' : {code: 85, x: 7, y: 3, chr:  'U', note: 'C#5', black: true },
+		'i' : {code: 73, x: 8, y: 3, chr:  'I', note: 'F 5', black: false},
+		'o' : {code: 79, x: 9, y: 3, chr:  'O', note: 'A 5', black: false},
+		'p' : {code: 80, x:10, y: 3, chr:  'P', note: 'C#6', black: true },
+   
+		'a' : {code: 65, x: 1, y: 2, chr:  'A', note: 'A#2', black: true },
+		's' : {code: 83, x: 2, y: 2, chr:  'S', note: 'D 3', black: false},
+		'd' : {code: 68, x: 3, y: 2, chr:  'D', note: 'F#3', black: true },
+		'f' : {code: 70, x: 4, y: 2, chr:  'F', note: 'A#3', black: true },
+		'g' : {code: 71, x: 5, y: 2, chr:  'G', note: 'D 4', black: false},
+		'h' : {code: 72, x: 6, y: 2, chr:  'H', note: 'F#4', black: true },
+		'j' : {code: 74, x: 7, y: 2, chr:  'J', note: 'A#4', black: true },
+		'k' : {code: 75, x: 8, y: 2, chr:  'K', note: 'D 5', black: false},
+		'l' : {code: 76, x: 9, y: 2, chr:  'L', note: 'F#5', black: true },
+		';' : {code:186, x:10, y: 2, chr:  ';', note: 'A#5', black: true },
+   
+		'z' : {code: 90, x: 1, y: 1, chr:  'Z', note: 'G 2', black: false},
+		'x' : {code: 88, x: 2, y: 1, chr:  'X', note: 'B 2', black: false},
+		'c' : {code: 67, x: 3, y: 1, chr:  'C', note: 'D#3', black: true },
+		'v' : {code: 86, x: 4, y: 1, chr:  'V', note: 'G 3', black: false},
+		'b' : {code: 66, x: 5, y: 1, chr:  'B', note: 'B 3', black: false},
+		'n' : {code: 78, x: 6, y: 1, chr:  'N', note: 'D#4', black: true },
+		'm' : {code: 77, x: 7, y: 1, chr:  'M', note: 'G 4', black: false},
+		',' : {code:188, x: 8, y: 1, chr:  ',', note: 'B 4', black: false},
+		'.' : {code:190, x: 9, y: 1, chr:  '.', note: 'D#5', black: true },
+		'/' : {code:191, x:10, y: 1, chr:  '/', note: 'G 5', black: false},
+  
+		'f1': {code:112, x: 2, y: 5, chr: 'F1', note: 'B 3', black: false},
+		'f2': {code:113, x: 3, y: 5, chr: 'F2', note: 'D#4', black: true },
+		'f3': {code:114, x: 4, y: 5, chr: 'F3', note: 'G 4', black: false},
+		'f4': {code:115, x: 5, y: 5, chr: 'F4', note: 'B 4', black: false},
+		'f5': {code:116, x: 6, y: 5, chr: 'F5', note: 'D#5', black: true },
+		'f6': {code:117, x: 7, y: 5, chr: 'F6', note: 'G 5', black: false},
+		'f7': {code:118, x: 8, y: 5, chr: 'F7', note: 'B 5', black: false},
+		'f8': {code:119, x: 9, y: 5, chr: 'F8', note: 'D#6', black: true },
+		'f9': {code:120, x:10, y: 5, chr: 'F9', note: 'G 6', black: false},
+		'f10':{code:121, x:11, y: 5, chr:'F10', note: 'B 6', black: false}
+		
+	};
+
+	var mapping_by_kcode = function(c) {
+		var f = function(k) {
+			if (k.code == c) { return true;	}
+		}
+
+		var m = _.find(mapping, f);
+
+		return m;
+	}
+
+	var note_to_freq = function(midi) {
+		return 440 * Math.pow(2, (midi - 69) / 12);
+	}
+
+	var freq_for_mapping = function(m) {
+
+		var note = transpose + m.x * 4 + m.y *3;
+
+		var freq = note_to_freq(note);
+
+		return freq;
+	}
+
+	
+	var note_for_key = function(e) {
+		var find_mapping = function(key) {
+			if (key.code == e.keyCode) {return true}
+		}
+
+		var current_key = _.find(mapping, find_mapping);
+
+		if (current_key == undefined) {
+			return e.preventDefault()
+		};
+
+		var the_x = current_key.x * 4;
+		var the_y = current_key.y * 3;
+
+		var note = transpose + the_x + the_y;
+
+		return note;
+
+	};
+
+	var freq_for_key = function(e) {
+		
+		var note = note_for_key(e);
+
+		var freq = note_to_freq(note);
+
+		return freq;
+
+	};
+
+	_.each(mapping, function(key) {
+		key.freq = freq_for_mapping(key);
+
+		key.note_num = 4 * key.x + 3 * key.y + transpose;
+
+		if (key.black == true) {
+			key.color_class = 'black_key raised_key';
+		} else {
+			key.color_class = 'white_key';
+		}
+	})
+
+	var toggle_key = function(k, on_off) {
+		if (on_off == true) {
+			var add_or_remove = "addClass";
+			var inverse = 'removeClass';
+		} else {
+			var add_or_remove = "removeClass";
+			var inverse = 'addClass';
+		};
+
+		var selector = '.key_' + k.note_num + ', .key_' + k.x + '_' + k.y;
+		var $key = $(selector);
+
+		$key[add_or_remove]('key_active');
+		$key[inverse]('key_inactive');
+	}
+
+	$(document).on('keydown', function(e){
+		var freq = freq_for_key(e);
+		var k = mapping_by_kcode(e.keyCode);
+		
+		if (k != undefined) {
+
+			if (k.pressed != true) {
+				k.pressed = true;
+
+				if (freq != undefined) {
+					// synth.noteOnWithFreq(freq, 100);
+					wad_synth.play({
+						pitch: freq,
+						label: k.note
+					})
+				}
+				
+				toggle_key(k, true);
+			}
+
+			if (k.timeout != undefined) {clearTimeout(k.timeout)};
+
+		}
+	})
+
+	$(document).on('keyup', function(e){
+		var note = note_for_key(e);
+		var k = mapping_by_kcode(e.keyCode);
+
+		if (k != undefined) {
+
+			k.pressed = false;
+
+			if (note != undefined) {
+				// synth.noteOff(note, 100);
+				wad_synth.stop(k.note);
+			}
+			
+			toggle_key(k, false);
+						
+			if (k.timeout != undefined) {clearTimeout(k.timeout)};
+
+			k.timeout = setTimeout(function(){
+				var s = '.key_' + k.x + '_' + k.y;
+				$(s).removeClass('key_inactive');
+			}, 5000);
+		}
+	})
+
+	var mapping_at = function(x, y) {
+		var m = _.find(mapping, function(item) {
+			return (item.x == x && item.y == y);
+		})
+		
+		return m;
+	}
+
+	var key_char_at = function(x, y) {
+		return mapping_at(x, y).chr;
+	}
+
+	// draw keyboard
+
+	for (var y = 5; y >= 1; y--) {
+		
+		var $row = $('<div class="row row_' + y + '"></div>');
+
+		$('.computer_keys').append($row);
+
+		for (var x = 1; x <= 10; x++) {
+			var the_x = x;
+			var the_y = y;
+			if (y == 5) {
+				the_x++;
+			};
+
+			var m = _.find(mapping, function(i){return (i.x == the_x && i.y == the_y)});
+
+			var $key = $('<span class="key key_' + the_x + '_' + the_y + ' ' + m.color_class + '"><span class="kc">' + key_char_at(the_x, the_y) + '</span><span class="hz">' + Math.round(freq_for_mapping(m)) + ' Hz</span><span class="note">' + m.note + '</span></span>')
+
+			$row.append($key)
+		};
+	}
+
+	// draw piano keys
+
+	for (var k = 4 * 3 - 7; k <= 8 * 5 + 20; k++) {
+		var note = k + transpose;
+		var m = _.find(mapping, function(m){
+			return (m.note_num == note);
+		})
+
+		if (m != undefined) {
+			var key_element = $('<span class="key key_' + m.x + '_' + m.y + ' ' + m.color_class + ' key_' + m.note_num + '"></span>');
+			$('.piano_keys').append(key_element);
+		} else {
+			var key_element = $('<span class="key key_' + note + '"></span>');
+			$('.piano_keys').append(key_element);
+		}
+	}
+
+})
+</script>
+<style>
+
+body {
+	background-color: #222;
+	color: white;
+	font-family: 'Lucida Grande', 'Lucida Sans Unicode', sans-serif;
+}
+a {
+	color: orange; text-decoration: none;
+}
+
+
+.computer_keys .key {
+	box-sizing: border-box;	
+	display: inline-block;
+	width: 4rem;
+	height: 4rem;
+	border: 2px solid #222;
+}
+
+.computer_keys .row {
+	height: 4rem;
+	width: 40rem;
+}
+
+.computer_keys .row_1{
+	margin-left: 9rem;
+}
+.computer_keys .row_2{
+	margin-left: 6rem;
+}
+.computer_keys .row_3 {
+	margin-left: 4rem;
+}
+.computer_keys .row_4 {
+	margin-left: 0rem;
+}
+.computer_keys .row_5 {
+	margin-left: 2rem;
+}
+
+.computer_keys {
+	margin-top: 3rem;
+	margin-left: -7rem;
+	line-height: 4rem;
+}
+.computer_keys .key {
+	background-color: purple;
+	transition: background-color 12s;
+	border-radius: 6px;
+}
+
+.computer_keys .kc {
+	font-weight: bold;
+}
+
+.computer_keys .row_5 {
+	height: 3rem;
+}
+.computer_keys .row_5 .key {
+	line-height: 3rem;
+	height: 3rem;
+}
+.computer_keys .row_5 .kc {
+	font-size: 0.4rem;
+	padding-left: 2rem;
+	text-align: right;
+}
+
+.computer_keys .key_1_4, .computer_keys .key_2_5, .computer_keys .key_5_5, .computer_keys .key_8_5,
+.computer_keys .key_1_1, .computer_keys .key_2_2, .computer_keys .key_3_3, .computer_keys .key_4_4,
+.computer_keys .key_4_1, .computer_keys .key_5_2, .computer_keys .key_6_3, .computer_keys .key_7_4,
+.computer_keys .key_7_1, .computer_keys .key_8_2, .computer_keys .key_9_3, .computer_keys .key_10_4, .computer_keys .key_11_5, .computer_keys .key_10_1 {
+	background-color: darkviolet;
+}
+
+.computer_keys .key_1_3, .computer_keys .key_2_4, .computer_keys .key_3_5, .computer_keys .key_6_5,
+.computer_keys .key_2_1, .computer_keys .key_3_2, .computer_keys .key_4_3, .computer_keys .key_5_4,
+.computer_keys .key_5_1, .computer_keys .key_6_2, .computer_keys .key_7_3, .computer_keys .key_8_4, .computer_keys .key_9_5,
+.computer_keys .key_8_1, .computer_keys .key_9_2, .computer_keys .key_10_3 {
+	background-color: darkslateblue;
+}
+
+.computer_keys .key_inactive {
+	background-color: red;
+	transition: background-color 6s;
+}
+.computer_keys .key_active {
+	transition: background-color 0.3s;
+	background-color: orange;
+	transform: translate(0, 2px);
+}
+
+.computer_keys .key {
+	position: relative;
+}
+
+.computer_keys .hz, .computer_keys .note {
+	font-size: 0.5rem;
+	line-height: 1rem;
+}
+
+.computer_keys .hz {
+	position: absolute;
+	top: 0;
+	right: 0.5rem;
+	color: rgba(32, 32, 32, .66);
+}
+
+.computer_keys .note {
+	position: absolute;
+	bottom: 0.2rem;
+	left: 0.2rem;
+	padding: 0 .2rem;
+	line-height: 0.9rem;
+	border-radius: 4px;
+}
+
+.computer_keys .black_key .note {
+	background: rgba(0, 0, 0, .33);
+	color: white;
+}
+.computer_keys .white_key .note {
+	background: rgba(255, 255, 255, .50);
+	color: black;
+}
+
+.piano_keys {
+	margin-top: 3rem;
+	margin-bottom: 3rem;
+}
+
+.piano_keys .key {
+	display: inline-block;
+	box-sizing: border-box;
+	border: 1px solid #222;
+	width: 1rem;
+	height: 4rem;
+	background-color: #999;
+	border-radius: 4px;
+}
+
+.piano_keys .white_key {
+	background-color: white;
+}
+.piano_keys .black_key {
+	background-color: black;
+}
+
+.piano_keys .raised_key, .piano_keys .key_42, .piano_keys .key_44, .piano_keys .key_56, .piano_keys .key_90, .piano_keys .key_92, .piano_keys .key_94, .piano_keys .key_97 {
+	position: absolute;
+	margin-top: -0.8rem;
+	height: 3.5rem;
+	margin-left: -0.25rem;
+	width: 0.6rem;
+	border-width: 2px;
+}
+
+.piano_keys .key_inactive {
+	transition: background-color 3s;
+}
+.piano_keys .key_active {
+	background-color: orange;
+	transition: background-color 0s;
+}
+
+</style>
+
+</head>
+
+<body>
+<center>
+<br><br><br>
+<p>Keyboard <a href='https://en.wikipedia.org/wiki/Tonnetz' target='_blank'>Tonnetz</a></p>
+<p><div class='keys computer_keys'></div></p>
+<p><div class='keys piano_keys'></div></p>
+<p><a href='http://twitter.com/some1else' target='_blank'>@some1else</a></p>
+</center>
+</body>
+</html>
