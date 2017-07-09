@@ -1,0 +1,180 @@
+body {
+	background-color: #222;
+	color: white;
+	font-family: 'Lucida Grande', 'Lucida Sans Unicode', sans-serif;
+}
+
+a {
+	color: orange; text-decoration: none;
+}
+
+.computer_keys .key {
+	box-sizing: border-box;	
+	display: inline-block;
+	width: 4rem;
+	height: 4rem;
+	border: 2px solid #222;
+}
+
+.computer_keys .row {
+	height: 4rem;
+	width: 40rem;
+}
+
+.computer_keys .row_1{
+	margin-left: 9rem;
+}
+.computer_keys .row_2{
+	margin-left: 6rem;
+}
+.computer_keys .row_3 {
+	margin-left: 4rem;
+}
+.computer_keys .row_4 {
+	margin-left: 0rem;
+}
+.computer_keys .row_5 {
+	margin-left: 2rem;
+}
+
+.computer_keys {
+	margin-top: 3rem;
+	margin-left: -7rem;
+	line-height: 4rem;
+}
+.computer_keys .key {
+	background-color: purple;
+	transition: background-color 6s;
+	border-radius: 6px;
+}
+
+.computer_keys .kc {
+	font-weight: bold;
+}
+
+.computer_keys .row_5 {
+	height: 3rem;
+}
+.computer_keys .row_5 .key {
+	line-height: 3rem;
+	height: 3rem;
+}
+.computer_keys .row_5 .kc {
+	font-size: 0.4rem;
+	padding-left: 2rem;
+	text-align: right;
+}
+
+.computer_keys .key_1_4, .computer_keys .key_2_5, .computer_keys .key_5_5, .computer_keys .key_8_5,
+.computer_keys .key_1_1, .computer_keys .key_2_2, .computer_keys .key_3_3, .computer_keys .key_4_4,
+.computer_keys .key_4_1, .computer_keys .key_5_2, .computer_keys .key_6_3, .computer_keys .key_7_4,
+.computer_keys .key_7_1, .computer_keys .key_8_2, .computer_keys .key_9_3, .computer_keys .key_10_4, .computer_keys .key_11_5, .computer_keys .key_10_1 {
+	background-color: darkviolet;
+}
+
+.computer_keys .key_1_3, .computer_keys .key_2_4, .computer_keys .key_3_5, .computer_keys .key_6_5,
+.computer_keys .key_2_1, .computer_keys .key_3_2, .computer_keys .key_4_3, .computer_keys .key_5_4,
+.computer_keys .key_5_1, .computer_keys .key_6_2, .computer_keys .key_7_3, .computer_keys .key_8_4, .computer_keys .key_9_5,
+.computer_keys .key_8_1, .computer_keys .key_9_2, .computer_keys .key_10_3 {
+	background-color: darkslateblue;
+}
+
+.computer_keys .black_key {
+	background: #333;
+}
+.computer_keys .black_key.key_inactive {
+	background: darkslateblue;
+}
+
+.computer_keys .white_key {
+	background: #999;
+}
+.computer_keys .white_key.key_inactive {
+	background: darkviolet;
+}
+
+.computer_keys .key_inactive {
+	transition: background-color 1s;
+}
+.computer_keys .key_active {
+	transition: background-color 0.1s;
+	background-color: orange;
+	transform: translate(0, 2px);
+}
+
+.computer_keys .key {
+	position: relative;
+}
+
+.computer_keys .hz, .computer_keys .note {
+	font-size: 0.5rem;
+	line-height: 1rem;
+}
+
+.computer_keys .hz {
+	position: absolute;
+	top: 0;
+	right: 0.5rem;
+	color: rgba(32, 32, 32, .66);
+}
+
+.computer_keys .note {
+	position: absolute;
+	bottom: 0.2rem;
+	left: 0.2rem;
+	padding: 0 .2rem;
+	line-height: 0.9rem;
+	border-radius: 4px;
+}
+
+.computer_keys .black_key .note {
+	background: rgba(0, 0, 0, .33);
+	color: white;
+}
+.computer_keys .white_key .note {
+	background: rgba(255, 255, 255, .50);
+	color: black;
+}
+
+.piano_keys {
+	margin-top: 3rem;
+	margin-bottom: 3rem;
+}
+
+.piano_keys .key {
+	display: inline-block;
+	box-sizing: border-box;
+	border: 1px solid #222;
+	width: 1rem;
+	height: 4rem;
+	background-color: #999;
+	border-radius: 4px;
+}
+
+.piano_keys .white_key {
+	background-color: white;
+}
+.piano_keys .black_key {
+	background-color: black;
+}
+
+.piano_keys .raised_key,
+.piano_keys .key_42, .piano_keys .key_44,
+.piano_keys .key_56, .piano_keys .key_90,
+.piano_keys .key_92, .piano_keys .key_94,
+.piano_keys .key_97 {
+	position: absolute;
+	margin-top: -0.8rem;
+	height: 3.5rem;
+	margin-left: -0.25rem;
+	width: 0.6rem;
+	border-width: 2px;
+}
+
+.piano_keys .key_inactive {
+	transition: background-color 3s;
+}
+.piano_keys .key_active {
+	background-color: orange;
+	transition: background-color 0s;
+}

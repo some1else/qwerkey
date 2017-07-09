@@ -1,0 +1,14 @@
+{
+  "name": "qwerkey",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": {
+    "url": "git@github.com:Some1Else/qwerkey.git",
+    "type": "git"
+  },
+  "author": "Srđan Prodanović <srdjan.prodanovic@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "webmidi": "^2.0.0-rc.2"
+  }
+}
