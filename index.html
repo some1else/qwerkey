@@ -1,11 +1,10 @@
 <html>
 <head>
-
-<script src="lib/wad.min.js"></script>
 <script src="lib/jquery-2.2.0.min.js"></script>
 <script src="lib/underscore-min.js"></script>
+<script src="lib/wad.min.js"></script>
 <script>
-$(function(){
+const initWAD = function() {
 
 	var transpose = 36;
 	var timeout;
@@ -291,7 +290,28 @@ $(function(){
 		}
 	}
 
+}
+
+// function embedWAD() {
+//   const script = document.createElement('script')
+//   script.async = true
+//   script.src = "/lib/wad.min.js"
+//   const firstScript = document.getElementsByTagName('script')[0]
+//   firstScript.parentNode.insertBefore(script, firstScript)
+// }
+
+// embedWAD()
+
+$(function() {
+	initWAD()
+
+	$('#enabler').on('click', function() {
+		window.Wad && window.Wad.audioContext && window.Wad.audioContext.resume &&
+		window.Wad.audioContext.resume()
+		$('.overlay').hide()
+	})
 })
+
 </script>
 <style>
 
@@ -459,17 +479,43 @@ a {
 	transition: background-color 0s;
 }
 
+.overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	background: rgba(0,0,0,0.9);
+	z-index: 999;
+}
+
+#enabler {
+	padding: 1rem;
+	background: orange;
+	color: black;
+	border: none;
+	border-radius: 0.25rem;
+	font-weight: bold;
+}
+
 </style>
 
 </head>
 
 <body>
+<div class='overlay'>
+	<p>Keyboard <a href='https://en.wikipedia.org/wiki/Tonnetz' target='_blank'>Tonnetz</a></p>
+	<p><a href='http://twitter.com/some1else' target='_blank'>@some1else</a></p>
+	<p><button id='enabler'>Click here to enable audio</button></p>
+</div>
 <center>
 <br><br><br>
-<p>Keyboard <a href='https://en.wikipedia.org/wiki/Tonnetz' target='_blank'>Tonnetz</a></p>
 <p><div class='keys computer_keys'></div></p>
 <p><div class='keys piano_keys'></div></p>
-<p><a href='http://twitter.com/some1else' target='_blank'>@some1else</a></p>
 </center>
 </body>
 </html>
