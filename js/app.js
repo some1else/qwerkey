@@ -207,14 +207,14 @@ function playNote(pitch, label) {
 	// 	label: label
 	// })
 
-	output.playNote(pitch)
+	output.playNote(pitch, 1)
 }
 
 function stopNote(label) {
 	// synth.noteOff(note, 100);
 
 	// synth.stop(label);
-	output.stopNote(label)
+	output.stopNote(label, 1)
 }
 
 var keyOnDOM = function(k) {
