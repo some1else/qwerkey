@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 
-async function openApp(page, mode = 'both') {
+async function openApp(page, mode = 'both', enterMidi = true) {
   page.on('request', request => {
     expect(new URL(request.url()).pathname).not.toMatch(/\/(lib|node_modules)\//);
   });
   page.on('response', response => expect(response.status()).toBeLessThan(400));
   await page.addInitScript(mode => {
     window.midiMessages = [];
+    window.midiRequests = 0;
     const input = {
       id: 'input', name: 'Qwerkey In', type: 'input', state: 'connected',
       connection: 'open', manufacturer: 'Test', version: '1',
@@ -22,8 +23,8 @@ async function openApp(page, mode = 'both') {
     };
     window.otherMessages = [];
     const access = {
-      inputs: new Map(['both', 'input', 'multiple'].includes(mode) ? [['input', input]] : []),
-      outputs: new Map(['both', 'output', 'multiple'].includes(mode) ? [['output', output]] : []),
+      inputs: new Map(['both', 'input', 'multiple', 'pending'].includes(mode) ? [['input', input]] : []),
+      outputs: new Map(['both', 'output', 'multiple', 'pending'].includes(mode) ? [['output', output]] : []),
     };
     if (['multiple', 'other'].includes(mode)) {
       access.inputs.set(otherInput.id, otherInput);
@@ -36,10 +37,18 @@ async function openApp(page, mode = 'both') {
       return;
     }
     Object.defineProperty(navigator, 'requestMIDIAccess', {
-      value: () => mode === 'denied' ? Promise.reject(new Error('Access denied')) : Promise.resolve(access),
+      value: () => {
+        window.midiRequests++;
+        if (mode === 'pending') return new Promise(resolve => { window.resolveMidi = () => resolve(access); });
+        return mode === 'denied' ? Promise.reject(new Error('Access denied')) : Promise.resolve(access);
+      },
     });
   }, mode);
   await page.goto('./');
+  if (enterMidi) {
+    await page.locator('#enabler').click();
+    await page.locator('#midi-mode').click();
+  }
   await expect(page.locator('.computer_keys .key')).toHaveCount(50);
 }
 
@@ -213,4 +222,88 @@ test('places port controls below the piano and stacks them on mobile', async ({ 
   expect(inputBox.y).toBeGreaterThan(outputBox.y + outputBox.height);
   expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(390);
   await controls.screenshot({ path: '/tmp/qwerkey-ports-mobile.png' });
+});
+
+test('defaults to Audio behind the splash and delays MIDI access', async ({ page }) => {
+  await openApp(page, 'both', false);
+  await expect(page.locator('#audio-mode')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.overlay')).toBeVisible();
+  await expect(page.locator('.midi_ports')).toBeHidden();
+  await page.keyboard.press('y');
+  await expect(page.locator('.key_active')).toHaveCount(0);
+  await page.locator('#enabler').click();
+  await page.keyboard.press('y');
+  expect(await page.evaluate(() => window.midiRequests)).toBe(0);
+  expect(await page.evaluate(() => window.midiMessages)).toEqual([]);
+  const switchBox = await page.locator('.mode_switch').boundingBox();
+  const keyboardBox = await page.locator('.computer_keys').boundingBox();
+  expect(switchBox.y + switchBox.height).toBeLessThan(keyboardBox.y);
+  await page.screenshot({ path: '/tmp/qwerkey-audio-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileBox = await page.locator('.mode_switch').boundingBox();
+  expect(mobileBox.x).toBeGreaterThanOrEqual(0);
+  expect(mobileBox.x + mobileBox.width).toBeLessThanOrEqual(390);
+});
+
+test('switching releases audio and MIDI notes and preserves selected ports', async ({ page }) => {
+  await openApp(page, 'multiple');
+  await page.evaluate(() => {
+    window.releases = 0;
+    const cancel = AudioParam.prototype.cancelScheduledValues;
+    AudioParam.prototype.cancelScheduledValues = function (...args) {
+      window.releases++;
+      return cancel.apply(this, args);
+    };
+  });
+  await page.getByLabel('Output', { exact: true }).selectOption('other-output');
+  await page.locator('#audio-mode').click();
+  await page.keyboard.down('y');
+  await page.locator('#midi-mode').click();
+  expect(await page.evaluate(() => window.releases)).toBe(2);
+  expect(await page.locator('.key_active, .key_inactive').count()).toBe(0);
+  await page.keyboard.up('y');
+  await page.keyboard.down('t');
+  await page.evaluate(() => window.receiveNote([144, 69, 100]));
+  await page.locator('#audio-mode').click();
+  expect(await page.evaluate(() => window.otherMessages)).toEqual([[144, 65, 64], [128, 65, 64]]);
+  expect(await page.locator('.key_active, .key_inactive').count()).toBe(0);
+  await page.evaluate(() => window.receiveNote([144, 69, 100]));
+  await expect(page.locator('.key_active')).toHaveCount(0);
+  await page.keyboard.up('t');
+  await page.locator('#midi-mode').click();
+  await expect(page.locator('#midi-output')).toHaveValue('other-output');
+  expect(await page.evaluate(() => window.midiRequests)).toBe(1);
+});
+
+test('a late MIDI permission response stays inactive in Audio mode', async ({ page }) => {
+  await openApp(page, 'pending');
+  await page.locator('#audio-mode').click();
+  await page.evaluate(() => window.resolveMidi());
+  await expect(page.locator('#midi-input')).toHaveValue('input');
+  await page.evaluate(() => window.receiveNote([144, 69, 100]));
+  await page.keyboard.press('y');
+  await expect(page.locator('.key_active')).toHaveCount(0);
+  expect(await page.evaluate(() => window.midiMessages)).toEqual([]);
+});
+
+test('Safari blocks MIDI with an alert for pointer and keyboard activation', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
+    });
+  });
+  await openApp(page, 'both', false);
+  await page.locator('#enabler').click();
+  await expect(page.locator('#midi-mode')).toHaveAttribute('aria-disabled', 'true');
+  const alerts = [];
+  page.on('dialog', async dialog => { alerts.push(dialog.message()); await dialog.accept(); });
+  // aria-disabled keeps the explanatory action available, so use a real pointer.
+  const box = await page.locator('#midi-mode').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.locator('#midi-mode').focus();
+  await page.keyboard.press('Enter');
+  expect(alerts).toHaveLength(2);
+  expect(alerts[0]).toContain('unavailable in Safari');
+  await expect(page.locator('#audio-mode')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => window.midiRequests)).toBe(0);
 });

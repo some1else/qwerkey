@@ -1,3 +1,4 @@
+import { createSynth } from './audio';
 import { mappings, type KeyMapping } from './layout';
 import { createMidi, type MidiPorts } from './midi';
 
@@ -59,7 +60,15 @@ function drawKeyboard() {
   }
 }
 
+type Mode = 'audio' | 'midi';
+let mode: Mode = 'audio';
+let midiConnection: Promise<void> | undefined;
+const synth = createSynth();
+const safari = /Safari/i.test(navigator.userAgent)
+  && !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS|Android/i.test(navigator.userAgent);
+
 const midi = createMidi((pitch, active) => {
+  if (mode !== 'midi') return;
   // Preserve the first matching mapping for pitches shared by multiple keys.
   setKeyActive(mappings.find(key => key.noteNumber === pitch), active);
 }, renderPorts);
@@ -84,22 +93,58 @@ function handleKeyboard(event: KeyboardEvent, active: boolean) {
       const held = byCode.get(event.keyCode);
       if (held?.pressed) {
         held.pressed = false;
-        midi.sendNote(held.noteNumber, false);
+        sendNote(held, false);
         setKeyActive(held, false);
       }
     }
     return;
   }
+  if (!document.querySelector<HTMLElement>('.overlay')?.hidden) return;
   const key = byCode.get(event.keyCode);
   if (!key) {
-    event.preventDefault();
-    event.stopPropagation();
+    if (event.key !== 'Tab') event.preventDefault();
     return;
   }
   if (key.pressed === active) return;
   key.pressed = active;
-  midi.sendNote(key.noteNumber, active);
+  sendNote(key, active);
   setKeyActive(key, active);
+}
+
+function sendNote(key: KeyMapping, active: boolean) {
+  if (mode === 'midi') midi.sendNote(key.noteNumber, active);
+  else if (active) synth.play(key.code, key.frequency);
+  else synth.release(key.code);
+}
+
+function releaseHeldNotes() {
+  for (const key of mappings) {
+    if (key.pressed) sendNote(key, false);
+    key.pressed = false;
+    window.clearTimeout(key.timeout);
+  }
+  document.querySelectorAll('.key_active, .key_inactive').forEach(element => {
+    element.classList.remove('key_active', 'key_inactive');
+  });
+}
+
+function selectMode(next: Mode) {
+  if (next === 'midi' && safari) {
+    window.alert('Qwerkey’s MIDI mode is unavailable in Safari. You can keep playing in Audio mode or open Qwerkey in a browser with Web MIDI support.');
+    document.getElementById('instrument')?.focus();
+    return;
+  }
+  if (next !== mode) {
+    midi.setEnabled(false);
+    releaseHeldNotes();
+    mode = next;
+    midi.setEnabled(mode === 'midi');
+    if (mode === 'midi') midiConnection ??= midi.connect();
+    document.getElementById('audio-mode')?.setAttribute('aria-pressed', String(mode === 'audio'));
+    document.getElementById('midi-mode')?.setAttribute('aria-pressed', String(mode === 'midi'));
+    document.querySelector<HTMLElement>('.midi_ports')!.hidden = mode !== 'midi';
+  }
+  document.getElementById('instrument')?.focus();
 }
 
 function start() {
@@ -112,7 +157,23 @@ function start() {
   });
   document.addEventListener('keydown', event => handleKeyboard(event, true));
   document.addEventListener('keyup', event => handleKeyboard(event, false));
-  void midi.connect();
+  document.getElementById('audio-mode')?.addEventListener('click', () => selectMode('audio'));
+  document.getElementById('midi-mode')?.addEventListener('click', () => selectMode('midi'));
+  if (safari) document.getElementById('midi-mode')?.setAttribute('aria-disabled', 'true');
+  window.addEventListener('blur', releaseHeldNotes);
+  const enabler = document.querySelector<HTMLButtonElement>('#enabler');
+  enabler?.addEventListener('click', async () => {
+    enabler.disabled = true;
+    try {
+      await synth.enable();
+      document.querySelector<HTMLElement>('.overlay')!.hidden = true;
+      document.getElementById('instrument')?.focus();
+    } catch {
+      enabler.textContent = 'Audio could not start. Click to retry';
+    } finally {
+      enabler.disabled = false;
+    }
+  });
 }
 
 if (document.readyState === 'loading') {

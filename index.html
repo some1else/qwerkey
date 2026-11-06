@@ -7,13 +7,22 @@
 </head>
 
 <body>
-<center>
-<br><br><br>
+<div class="overlay">
+  <p>Keyboard <a href="https://en.wikipedia.org/wiki/Tonnetz" target="_blank">Tonnetz</a></p>
+  <p><a href="http://twitter.com/some1else" target="_blank">@some1else</a></p>
+  <p><button id="enabler">Click here to enable audio</button></p>
+</div>
+<center id="instrument" tabindex="-1">
+<div class="mode_switch" role="group" aria-label="Playback mode">
+  <button id="audio-mode" type="button" aria-pressed="true">Audio</button>
+  <button id="midi-mode" type="button" aria-pressed="false">MIDI</button>
+</div>
+
 <p><div class='keys computer_keys'></div></p>
 <p><div class='keys piano_keys'></div></p>
-<div class="midi_ports">
-  <div class="midi_port"><label for="midi-output">Output</label><span class="midi_select"><select id="midi-output"><option value="">-- Choose MIDI port --</option></select></span></div>
-  <div class="midi_port"><label for="midi-input">Input</label><span class="midi_select"><select id="midi-input"><option value="">-- Choose MIDI port --</option></select></span></div>
+<div class="midi_ports" hidden>
+  <div class="midi_port"><label for="midi-output">OUT</label><span class="midi_select"><select id="midi-output"><option value="">-- Choose MIDI port --</option></select></span></div>
+  <div class="midi_port"><label for="midi-input">IN</label><span class="midi_select"><select id="midi-input"><option value="">-- Choose MIDI port --</option></select></span></div>
 </div>
 </center>
 </body>

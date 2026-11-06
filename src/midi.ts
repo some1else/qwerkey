@@ -9,6 +9,7 @@ export function createMidi(
   onNote: (pitch: number, active: boolean) => void,
   onPorts: (ports: MidiPorts) => void = () => {},
 ) {
+  let enabled = false;
   let access: MIDIAccess | undefined;
   let input: MIDIInput | undefined;
   let output: MIDIOutput | undefined;
@@ -16,6 +17,7 @@ export function createMidi(
   const outgoing = new Set<number>();
 
   function receiveMessage(event: MIDIMessageEvent) {
+    if (!enabled) return;
     const data = event.data;
     if (!data || data.length !== 3) return;
     const [status, pitch, velocity] = data;
@@ -68,8 +70,8 @@ export function createMidi(
     if (!navigator.requestMIDIAccess) { publish(); return; }
     try {
       access = await navigator.requestMIDIAccess();
-      selectInput(Array.from(access.inputs.values()).find(port => port.state !== 'disconnected' && port.name === 'Qwerkey In')?.id ?? '');
-      selectOutput(Array.from(access.outputs.values()).find(port => port.state !== 'disconnected' && port.name === 'Qwerkey Out')?.id ?? '');
+      selectInput(Array.from(access.inputs.values()).find(port => port.state !== 'disconnected' && port.name === 'IAC Driver Qwerkey In')?.id ?? '');
+      selectOutput(Array.from(access.outputs.values()).find(port => port.state !== 'disconnected' && port.name === 'IAC Driver Qwerkey Out')?.id ?? '');
       access.onstatechange = () => {
         if (input && (input.state === 'disconnected' || !access?.inputs.has(input.id))) selectInput('');
         if (output && (output.state === 'disconnected' || !access?.outputs.has(output.id))) selectOutput('');
@@ -81,11 +83,22 @@ export function createMidi(
     }
   }
 
+  function setEnabled(value: boolean) {
+    if (!value) {
+      for (const pitch of outgoing) transmit(pitch, false);
+      outgoing.clear();
+      for (const pitch of incoming) onNote(pitch, false);
+      incoming.clear();
+    }
+    enabled = value;
+  }
+
   function sendNote(pitch: number, active: boolean) {
+    if (!enabled) return;
     if (active) outgoing.add(pitch);
     else if (!outgoing.delete(pitch)) return;
     transmit(pitch, active);
   }
 
-  return { connect, sendNote, selectInput, selectOutput };
+  return { connect, sendNote, selectInput, selectOutput, setEnabled };
 }
