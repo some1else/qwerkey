@@ -1,0 +1,311 @@
+html { min-width: 667px; }
+
+body {
+	display: flex;
+	flex-direction: column;
+	min-height: calc(100dvh - 1rem);
+	background-color: #222;
+	color: white;
+	font-family: 'Lucida Grande', 'Lucida Sans Unicode', sans-serif;
+}
+
+a {
+	color: orange; text-decoration: none;
+}
+
+.computer_keys .key {
+	box-sizing: border-box;	
+	display: inline-block;
+	width: var(--key-width);
+	height: var(--key-height);
+	flex-shrink: 0;
+	border: 2px solid #222;
+}
+
+.computer_keys .row {
+	display: flex;
+	height: var(--key-height);
+	width: calc(var(--key-width) * 10);
+}
+
+.computer_keys .row_1{
+	margin-left: var(--key-width);
+}
+.computer_keys .row_2{
+	margin-left: calc(var(--key-width) * .5);
+}
+.computer_keys .row_3 {
+	margin-left: calc(var(--key-width) * .25);
+}
+.computer_keys .row_4 {
+	margin-left: 0rem;
+}
+.computer_keys .row_5 {
+	margin-left: calc(var(--key-width) * .5);
+}
+
+.computer_keys {
+	/* Include the widest row offset when fitting the grid to the viewport. */
+	--key-width: min(4rem, calc((max(667px, 100vw) - 2rem) / 11));
+	--key-height: max(3rem, var(--key-width));
+	width: calc(var(--key-width) * 11);
+	margin: 2rem auto 0;
+	line-height: var(--key-height);
+	text-align: center;
+}
+.computer_keys .key {
+	background-color: purple;
+	transition: background-color 6s;
+	border-radius: 6px;
+}
+
+.computer_keys .kc {
+	font-weight: bold;
+}
+
+.computer_keys .row_5 .kc {
+	font-size: .625rem;
+}
+
+.computer_keys .key_1_4, .computer_keys .key_2_5, .computer_keys .key_5_5, .computer_keys .key_8_5,
+.computer_keys .key_1_1, .computer_keys .key_2_2, .computer_keys .key_3_3, .computer_keys .key_4_4,
+.computer_keys .key_4_1, .computer_keys .key_5_2, .computer_keys .key_6_3, .computer_keys .key_7_4,
+.computer_keys .key_7_1, .computer_keys .key_8_2, .computer_keys .key_9_3, .computer_keys .key_10_4, .computer_keys .key_11_5, .computer_keys .key_10_1 {
+	background-color: darkviolet;
+}
+
+.computer_keys .key_1_3, .computer_keys .key_2_4, .computer_keys .key_3_5, .computer_keys .key_6_5,
+.computer_keys .key_2_1, .computer_keys .key_3_2, .computer_keys .key_4_3, .computer_keys .key_5_4,
+.computer_keys .key_5_1, .computer_keys .key_6_2, .computer_keys .key_7_3, .computer_keys .key_8_4, .computer_keys .key_9_5,
+.computer_keys .key_8_1, .computer_keys .key_9_2, .computer_keys .key_10_3 {
+	background-color: darkslateblue;
+}
+
+.computer_keys .black_key {
+	background: #333;
+}
+.computer_keys .black_key.key_inactive {
+	background: darkslateblue;
+}
+
+.computer_keys .white_key {
+	background: #999;
+}
+.computer_keys .white_key.key_inactive {
+	background: darkviolet;
+}
+
+.computer_keys .key_inactive {
+	transition: background-color 1s;
+}
+.computer_keys .key_active {
+	transition: background-color 0.1s;
+	background-color: orange;
+	transform: translate(0, 2px);
+}
+
+.computer_keys .key {
+	position: relative;
+}
+
+.computer_keys .hz, .computer_keys .note {
+	font-size: 0.5rem;
+	line-height: 1rem;
+}
+
+.computer_keys .hz {
+	position: absolute;
+	top: 0;
+	right: 0.5rem;
+	color: rgba(32, 32, 32, .66);
+}
+
+.computer_keys .note {
+	position: absolute;
+	bottom: 0.2rem;
+	left: 0.2rem;
+	padding: 0 .2rem;
+	line-height: 0.9rem;
+	border-radius: 4px;
+}
+
+.computer_keys .black_key .note {
+	background: rgba(0, 0, 0, .33);
+	color: white;
+}
+.computer_keys .white_key .note {
+	background: rgba(255, 255, 255, .50);
+	color: black;
+}
+
+.piano_keys {
+	position: relative;
+	width: max-content;
+	margin: .8rem auto 0;
+	white-space: nowrap;
+}
+
+.piano_keys .key {
+	display: inline-block;
+	box-sizing: border-box;
+	border: 1px solid #222;
+	width: 1rem;
+	height: 4rem;
+	background-color: #999;
+	border-radius: 4px;
+}
+
+.piano_keys .white_key {
+	background-color: white;
+}
+.piano_keys .black_key {
+	background-color: black;
+}
+
+.piano_keys .raised_key,
+.piano_keys .key_42, .piano_keys .key_44,
+.piano_keys .key_56, .piano_keys .key_90,
+.piano_keys .key_92, .piano_keys .key_94,
+.piano_keys .key_97 {
+	position: absolute;
+	margin-top: -0.8rem;
+	height: 3.5rem;
+	margin-left: -0.25rem;
+	width: 0.6rem;
+	border-width: 2px;
+}
+
+.piano_keys .key_inactive {
+	transition: background-color 3s;
+}
+.piano_keys .key_active {
+	background-color: orange;
+	transition: background-color 0s;
+}
+
+.midi_ports {
+	box-sizing: border-box;
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 1rem 2rem;
+	margin: 2rem auto 0;
+	padding: 0 1rem;
+	max-width: 34rem;
+	font-size: .8125rem;
+	color: #999;
+	opacity: 0.5;
+}
+.midi_port {
+	display: flex;
+	align-items: center;
+	gap: .75rem;
+	flex: 1 1 0;
+	min-width: 0;
+}
+.midi_port label { font-size: inherit; font-weight: bold; }
+.midi_select { position: relative; flex: 1; min-width: 0; }
+.midi_select::after {
+	content: '';
+	position: absolute;
+	right: .75rem;
+	top: 50%;
+	width: .4rem;
+	height: .4rem;
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	transform: translateY(-75%) rotate(45deg);
+	pointer-events: none;
+}
+.midi_select select {
+	appearance: none;
+	box-sizing: border-box;
+	width: 100%;
+	padding: .5rem 2rem .5rem .75rem;
+	border: 1px solid #eee;
+	border-radius: .375rem;
+	background: #222;
+	color: white;
+	font: inherit;
+	line-height: 1.25rem;
+	text-align: center;
+	cursor: pointer;
+}
+.midi_select select:focus-visible { outline: 3px solid orange; outline-offset: 3px; }
+
+[hidden] { display: none !important; }
+#instrument {
+	display: flow-root;
+	flex-shrink: 0;
+	margin-block: auto;
+	padding-block: 1rem;
+	outline: none;
+}
+.mode_switch {
+  display: flex;
+  width: min(16rem, calc(100% - 2rem));
+  margin: 0 auto;
+  opacity: 0.5;
+}
+.mode_switch button {
+  flex: 1;
+  padding: .5rem .75rem;
+  border: 1px solid #eee;
+  background: #222;
+  color: white;
+  font: inherit;
+  font-size: .8125rem;
+  font-weight: bold;
+  line-height: 1.25rem;
+  cursor: pointer;
+}
+.mode_switch button:first-child { border-radius: .375rem 0 0 .375rem; }
+.mode_switch button:last-child { border-radius: 0 .375rem .375rem 0; margin-left: -2px; }
+.mode_switch button[aria-pressed="true"] { background: #eee; color: black; }
+.mode_switch button[aria-disabled="true"] { color: #999; cursor: not-allowed; }
+.mode_switch button:focus-visible { outline: 3px solid orange; outline-offset: 3px; z-index: 1; }
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, .9);
+  z-index: 999;
+}
+#enabler {
+  padding: 1rem;
+  background: orange;
+  color: black;
+  border: none;
+  border-radius: .25rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.keys .key { touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.piano_scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	margin: 1rem auto 0;
+}
+.piano_scroll:focus-visible { outline: 2px solid orange; outline-offset: -2px; }
+
+@media (width > 667px) {
+	/* Keep the MIDI row's footprint when Audio mode hides its controls. */
+	.midi_ports[hidden] {
+		display: flex !important;
+		visibility: hidden;
+	}
+}
+
+@media (max-width: 667px) {
+	.mode_switch { display: none; }
+	.computer_keys { margin-top: 0; }
+	.piano_scroll { margin-top: 1.5rem; }
+	.midi_ports { margin-top: 1rem; }
+	.midi_port select, .mode_switch button { min-height: 44px; }
+	.computer_keys .hz { right: .2rem; font-size: .4375rem; }
+	.computer_keys .note { left: 0; padding: 0 .1rem; }
+}
