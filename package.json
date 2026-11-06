@@ -1,7 +1,6 @@
 {
   "name": "qwerkey",
   "version": "1.0.0",
-  "main": "index.js",
   "repository": {
     "url": "git@github.com:Some1Else/qwerkey.git",
     "type": "git"
@@ -9,6 +8,23 @@
   "author": "Srđan Prodanović <srdjan.prodanovic@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "webmidi": "^2.0.0-rc.2"
+    "jquery": "3.7.1",
+    "underscore": "1.13.8",
+    "webmidi": "2.0.0-rc.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "vite": "8.3.6"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "npm run build && playwright test"
   }
 }

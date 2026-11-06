@@ -1,45 +1,10 @@
+import $ from 'jquery';
+import _ from 'underscore';
+import WebMidi from 'webmidi';
+
 var TRANSPOSE = 36;
 var timeout;
 var ACTIVITY_MS = 3000;
-// var synth = T("OscGen", {wave:"sin", mul:0.25}).play();
-
-// var wad_1_soft_sine = new Wad({
-// 	source : 'sine',
-// 	volume: 0.42,
-// 	env: {
-// 		attack: 0.01,
-// 		decay: 0.1,
-// 		sustain: 0.4,
-// 		hold: 32,
-// 		release: 0.15
-// 	},
-// 	filter: {
-// 		type: 'lowpass',
-// 		frequency: 6,
-// 		q: 0.7,
-// 		env: {
-// 			frequency: 2000,
-// 			attack: 3
-// 		}
-// 	}
-// });
-
-// var wad_2_hard_sine = new Wad({
-// 	source : 'sine',
-// 	volume: 0.66,
-// 	env: {
-// 		attack: 0.005,
-// 		decay: 0.2,
-// 		sustain: 0,
-// 		hold: 0,
-// 		release: 0.05
-// 	}
-// });
-
-// var synth = new Wad.Poly();
-
-// synth.add(wad_2_hard_sine).add(wad_1_soft_sine);
-
 var MAP = {
 
 	'1' : {code: 49, x: 1, y: 4, chr:  '1', note: 'E 2', black: false},
@@ -199,22 +164,12 @@ var toggle_key = function(k, on_off) {
 	$key[inverse]('key_inactive');
 }
 
-function playNote(pitch, label) {
-	// synth.noteOnWithFreq(freq, 100);
-
-	// synth.play({
-	// 	pitch: pitch,
-	// 	label: label
-	// })
-
-	output.playNote(pitch, 1)
+function playNote(pitch) {
+	if (output) output.playNote(pitch, 1)
 }
 
-function stopNote(label) {
-	// synth.noteOff(note, 100);
-
-	// synth.stop(label);
-	output.stopNote(label, 1)
+function stopNote(pitch) {
+	if (output) output.stopNote(pitch, 1)
 }
 
 var keyOnDOM = function(k) {
@@ -225,6 +180,7 @@ var keyOnDOM = function(k) {
 }
 
 var keyOffDOM = function(k) {
+	if (k == undefined) { return false }
 	if (k.timeout != undefined) { clearTimeout(k.timeout) }
 
 	k.timeout = setTimeout(function(){
@@ -356,32 +312,11 @@ function listenForNotes() {
 }
 
 WebMidi.enable(function(err){
-	// output = WebMidi.outputs[1]
+	if (err) return
 	input = WebMidi.getInputByName('Qwerkey In')
 	output = WebMidi.getOutputByName('Qwerkey Out')
-	listenForNotes()
-	console.log('this happens', input, output)
+	if (input) listenForNotes()
 })
-
-// var output = null;
-
-// function onMIDIInit(midi) {
-// 	midi.outputs.forEach(function(out) {
-// 		output = out
-// 	});
-
-// 	output.open();
-// 	debugger;
-// };
-// function onMIDISystemError() {
-// 	console.log('error')
-// };
-
-// window.addEventListener('load', function() {   
-//   navigator.requestMIDIAccess().then( 
-//     onMIDIInit, 
-//     onMIDISystemError );
-// });
 
 // Generate keyboard & piano
 $(function() {

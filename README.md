@@ -17,3 +17,32 @@ First commercial product to apply the principle was probably the [Opal Sonome ke
 - [ ] Clicking a piano key reflects it on the keyboard
 - [ ] Send out MIDI
 - [ ] Recording and playback
+## Development
+
+Use Node.js 22.12 or newer and npm. Install packages and the test browser:
+
+```sh
+npm ci
+npx playwright install chromium
+```
+
+Run `npm run dev` to start the development server. Run `npm run build` to
+produce a static site in `dist/`, and `npm run preview` to serve that build.
+Deploy the contents of `dist/`. Asset URLs are relative to support hosting in
+a subdirectory.
+
+## MIDI and tests
+
+The app uses WebMidi 2.0.0-rc.2, jQuery 3.7.1, and Underscore 1.13.8 through
+npm imports. Keyboard presses send MIDI notes on channel 1 to `Qwerkey Out`.
+Incoming notes from `Qwerkey In` highlight the keyboards. Input and output
+ports are optional and work independently. Use a browser with Web MIDI support
+and serve over HTTPS or localhost for MIDI access.
+
+Run `npm test` to build and run the small Playwright suite in Chromium. It tests
+rendering, chords, repeated keydown, MIDI input, and missing ports or denied
+access. Fake MIDI ports at the browser API boundary exercise the real WebMidi
+package without hardware. The production build is tested under `/qwerkey/`,
+including checks for failed requests, browser errors, and vendor asset URLs.
+A hardware check can be performed by connecting the named ports, playing a
+chord, releasing each key, and sending notes back through `Qwerkey In`.
