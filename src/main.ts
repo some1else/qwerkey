@@ -41,6 +41,8 @@ function drawKeyboard() {
       const mapping = mappings.find(key => key.x === x && key.y === y);
       if (!mapping) throw new Error(`Missing keyboard mapping at ${x}, ${y}`);
       const key = createKey(`key_${x}_${y} ${mapping.colorClass}`);
+      key.dataset.pitch = String(mapping.noteNumber);
+      key.dataset.code = String(mapping.code);
       const labels = { kc: mapping.chr, hz: `${Math.round(mapping.frequency)} Hz`, note: mapping.note };
       for (const [className, text] of Object.entries(labels)) {
         const label = document.createElement('span');
@@ -55,8 +57,11 @@ function drawKeyboard() {
 
   for (let pitch = 41; pitch <= 96; pitch++) {
     const mapping = mappings.find(key => key.noteNumber === pitch);
-    const classes = mapping ? `key_${mapping.x}_${mapping.y} ${mapping.colorClass} key_${pitch}` : `key_${pitch}`;
-    piano.append(createKey(classes));
+    const color = [1, 3, 6, 8, 10].includes(pitch % 12) ? 'black_key raised_key' : 'white_key';
+    const classes = mapping ? `key_${mapping.x}_${mapping.y} ${mapping.colorClass} key_${pitch}` : `${color} key_${pitch}`;
+    const key = createKey(classes);
+    key.dataset.pitch = String(pitch);
+    piano.append(key);
   }
 }
 
@@ -67,10 +72,19 @@ const synth = createSynth();
 const safari = /Safari/i.test(navigator.userAgent)
   && !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS|Android/i.test(navigator.userAgent);
 
+interface HeldNote {
+  pitch: number;
+  mapping?: KeyMapping;
+}
+
+const heldNotes = new Map<string, HeldNote>();
+const incomingNotes = new Set<number>();
+
 const midi = createMidi((pitch, active) => {
   if (mode !== 'midi') return;
-  // Preserve the first matching mapping for pitches shared by multiple keys.
-  setKeyActive(mappings.find(key => key.noteNumber === pitch), active);
+  if (active) incomingNotes.add(pitch);
+  else incomingNotes.delete(pitch);
+  refreshHighlights();
 }, renderPorts);
 
 function renderPorts(ports: MidiPorts) {
@@ -86,43 +100,77 @@ function renderPorts(ports: MidiPorts) {
   }
 }
 
+function refreshHighlights() {
+  const held = Array.from(heldNotes.values());
+  for (const key of mappings) {
+    const active = held.some(note => note.mapping === key)
+      || (incomingNotes.has(key.noteNumber) && mappings.find(item => item.noteNumber === key.noteNumber) === key);
+    const element = document.querySelector(`.computer_keys .key_${key.x}_${key.y}`);
+    if (element?.classList.contains('key_active') !== active) setKeyActive(key, active);
+  }
+  // A pitch can be held through several keys or input devices at once.
+  for (const element of document.querySelectorAll<HTMLElement>('.piano_keys .key')) {
+    const pitch = Number(element.dataset.pitch);
+    const active = incomingNotes.has(pitch) || held.some(note => note.pitch === pitch);
+    element.classList.toggle('key_active', active);
+  }
+}
+
+function sendNote(pitch: number, active: boolean) {
+  if (mode === 'midi') midi.sendNote(pitch, active);
+  else if (active) synth.play(pitch, 440 * Math.pow(2, (pitch - 69) / 12));
+  else synth.release(pitch);
+}
+
+function pressNote(source: string, note: HeldNote) {
+  if (heldNotes.has(source)) return;
+  const sounding = Array.from(heldNotes.values()).some(held => held.pitch === note.pitch);
+  heldNotes.set(source, note);
+  if (!sounding) sendNote(note.pitch, true);
+  refreshHighlights();
+}
+
+function releaseNote(source: string) {
+  const note = heldNotes.get(source);
+  if (!note) return;
+  heldNotes.delete(source);
+  if (!Array.from(heldNotes.values()).some(held => held.pitch === note.pitch)) sendNote(note.pitch, false);
+  refreshHighlights();
+}
+
 function handleKeyboard(event: KeyboardEvent, active: boolean) {
-  if (event.target instanceof Element && event.target.closest('select, input, textarea, button, [contenteditable]')) {
-    // Still release a musical key that was pressed before focus moved here.
-    if (!active) {
-      const held = byCode.get(event.keyCode);
-      if (held?.pressed) {
-        held.pressed = false;
-        sendNote(held, false);
-        setKeyActive(held, false);
-      }
-    }
+  const key = byCode.get(event.keyCode);
+  if (!active) {
+    releaseNote(`keyboard:${event.keyCode}`);
     return;
   }
+  if (event.target instanceof Element && event.target.closest('select, input, textarea, button, [contenteditable]')) return;
   if (!document.querySelector<HTMLElement>('.overlay')?.hidden) return;
-  const key = byCode.get(event.keyCode);
   if (!key) {
     if (event.key !== 'Tab') event.preventDefault();
     return;
   }
-  if (key.pressed === active) return;
-  key.pressed = active;
-  sendNote(key, active);
-  setKeyActive(key, active);
+  event.preventDefault();
+  pressNote(`keyboard:${key.code}`, { pitch: key.noteNumber, mapping: key });
 }
 
-function sendNote(key: KeyMapping, active: boolean) {
-  if (mode === 'midi') midi.sendNote(key.noteNumber, active);
-  else if (active) synth.play(key.code, key.frequency);
-  else synth.release(key.code);
+function handlePointerDown(event: PointerEvent) {
+  if (event.button !== 0 || !document.querySelector<HTMLElement>('.overlay')?.hidden) return;
+  const key = event.target instanceof Element ? event.target.closest<HTMLElement>('.key') : null;
+  if (!key?.dataset.pitch) return;
+  event.preventDefault();
+  key.setPointerCapture(event.pointerId);
+  document.getElementById('instrument')?.focus({ preventScroll: true });
+  const pitch = Number(key.dataset.pitch);
+  const mapping = key.dataset.code ? byCode.get(Number(key.dataset.code)) : mappings.find(item => item.noteNumber === pitch);
+  pressNote(`pointer:${event.pointerId}`, { pitch, mapping });
 }
 
 function releaseHeldNotes() {
-  for (const key of mappings) {
-    if (key.pressed) sendNote(key, false);
-    key.pressed = false;
-    window.clearTimeout(key.timeout);
-  }
+  for (const pitch of new Set(Array.from(heldNotes.values(), note => note.pitch))) sendNote(pitch, false);
+  heldNotes.clear();
+  incomingNotes.clear();
+  for (const key of mappings) window.clearTimeout(key.timeout);
   document.querySelectorAll('.key_active, .key_inactive').forEach(element => {
     element.classList.remove('key_active', 'key_inactive');
   });
@@ -160,7 +208,17 @@ function start() {
   document.getElementById('audio-mode')?.addEventListener('click', () => selectMode('audio'));
   document.getElementById('midi-mode')?.addEventListener('click', () => selectMode('midi'));
   if (safari) document.getElementById('midi-mode')?.setAttribute('aria-disabled', 'true');
+  document.querySelectorAll<HTMLElement>('.keys').forEach(keyboard => {
+    keyboard.addEventListener('pointerdown', handlePointerDown);
+  });
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
+    document.addEventListener(event, event => releaseNote(`pointer:${event.pointerId}`));
+  }
   window.addEventListener('blur', releaseHeldNotes);
+  window.addEventListener('pagehide', releaseHeldNotes);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseHeldNotes();
+  });
   const enabler = document.querySelector<HTMLButtonElement>('#enabler');
   enabler?.addEventListener('click', async () => {
     enabler.disabled = true;

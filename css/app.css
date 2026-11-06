@@ -1,4 +1,9 @@
+html { min-width: 667px; }
+
 body {
+	display: flex;
+	flex-direction: column;
+	min-height: calc(100dvh - 1rem);
 	background-color: #222;
 	color: white;
 	font-family: 'Lucida Grande', 'Lucida Sans Unicode', sans-serif;
@@ -11,36 +16,42 @@ a {
 .computer_keys .key {
 	box-sizing: border-box;	
 	display: inline-block;
-	width: 4rem;
-	height: 4rem;
+	width: var(--key-width);
+	height: var(--key-height);
+	flex-shrink: 0;
 	border: 2px solid #222;
 }
 
 .computer_keys .row {
-	height: 4rem;
-	width: 40rem;
+	display: flex;
+	height: var(--key-height);
+	width: calc(var(--key-width) * 10);
 }
 
 .computer_keys .row_1{
-	margin-left: 9rem;
+	margin-left: var(--key-width);
 }
 .computer_keys .row_2{
-	margin-left: 6rem;
+	margin-left: calc(var(--key-width) * .5);
 }
 .computer_keys .row_3 {
-	margin-left: 4rem;
+	margin-left: calc(var(--key-width) * .25);
 }
 .computer_keys .row_4 {
 	margin-left: 0rem;
 }
 .computer_keys .row_5 {
-	margin-left: 2rem;
+	margin-left: calc(var(--key-width) * .5);
 }
 
 .computer_keys {
-	margin-top: 3rem;
-	margin-left: -7rem;
-	line-height: 4rem;
+	/* Include the widest row offset when fitting the grid to the viewport. */
+	--key-width: min(4rem, calc((max(667px, 100vw) - 2rem) / 11));
+	--key-height: max(3rem, var(--key-width));
+	width: calc(var(--key-width) * 11);
+	margin: 2rem auto 0;
+	line-height: var(--key-height);
+	text-align: center;
 }
 .computer_keys .key {
 	background-color: purple;
@@ -52,17 +63,8 @@ a {
 	font-weight: bold;
 }
 
-.computer_keys .row_5 {
-	height: 3rem;
-}
-.computer_keys .row_5 .key {
-	line-height: 3rem;
-	height: 3rem;
-}
 .computer_keys .row_5 .kc {
-	font-size: 0.4rem;
-	padding-left: 2rem;
-	text-align: right;
+	font-size: .625rem;
 }
 
 .computer_keys .key_1_4, .computer_keys .key_2_5, .computer_keys .key_5_5, .computer_keys .key_8_5,
@@ -137,8 +139,10 @@ a {
 }
 
 .piano_keys {
-	margin-top: 3rem;
-	margin-bottom: 3rem;
+	position: relative;
+	width: max-content;
+	margin: .8rem auto 0;
+	white-space: nowrap;
 }
 
 .piano_keys .key {
@@ -185,11 +189,12 @@ a {
 	justify-content: center;
 	flex-wrap: wrap;
 	gap: 1rem 2rem;
-	margin: 0 auto 3rem;
+	margin: 2rem auto 0;
 	padding: 0 1rem;
-	max-width: 36rem;
+	max-width: 34rem;
 	font-size: .8125rem;
 	color: #999;
+	opacity: 0.5;
 }
 .midi_port {
 	display: flex;
@@ -227,18 +232,20 @@ a {
 	cursor: pointer;
 }
 .midi_select select:focus-visible { outline: 3px solid orange; outline-offset: 3px; }
-@media (max-width: 40rem) {
-	.midi_ports { flex-direction: column; align-items: center; }
-	.midi_port { flex: none; width: 100%; }
-	.midi_port label { width: 3.5rem; text-align: left; }
-}
 
 [hidden] { display: none !important; }
-#instrument { outline: none; }
+#instrument {
+	display: flow-root;
+	flex-shrink: 0;
+	margin-block: auto;
+	padding-block: 1rem;
+	outline: none;
+}
 .mode_switch {
   display: flex;
   width: min(16rem, calc(100% - 2rem));
-  margin: 3rem auto 0;
+  margin: 0 auto;
+  opacity: 0.5;
 }
 .mode_switch button {
   flex: 1;
@@ -275,4 +282,30 @@ a {
   border-radius: .25rem;
   font-weight: bold;
   cursor: pointer;
+}
+
+.keys .key { touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.piano_scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	margin: 1rem auto 0;
+}
+.piano_scroll:focus-visible { outline: 2px solid orange; outline-offset: -2px; }
+
+@media (width > 667px) {
+	/* Keep the MIDI row's footprint when Audio mode hides its controls. */
+	.midi_ports[hidden] {
+		display: flex !important;
+		visibility: hidden;
+	}
+}
+
+@media (max-width: 667px) {
+	.mode_switch { display: none; }
+	.computer_keys { margin-top: 0; }
+	.piano_scroll { margin-top: 1.5rem; }
+	.midi_ports { margin-top: 1rem; }
+	.midi_port select, .mode_switch button { min-height: 44px; }
+	.computer_keys .hz { right: .2rem; font-size: .4375rem; }
+	.computer_keys .note { left: 0; padding: 0 .1rem; }
 }

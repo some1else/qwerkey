@@ -11,7 +11,6 @@ export interface KeyMapping extends KeyDefinition {
   noteNumber: number;
   frequency: number;
   colorClass: string;
-  pressed: boolean;
   timeout?: number;
 }
 
@@ -81,6 +80,5 @@ export const mappings: KeyMapping[] = Object.values(definitions).map(key => {
     noteNumber,
     frequency: 440 * Math.pow(2, (noteNumber - 69) / 12),
     colorClass: key.black ? 'black_key raised_key' : 'white_key',
-    pressed: false,
   };
 });

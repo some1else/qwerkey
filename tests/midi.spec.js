@@ -9,12 +9,12 @@ async function openApp(page, mode = 'both', enterMidi = true) {
     window.midiMessages = [];
     window.midiRequests = 0;
     const input = {
-      id: 'input', name: 'Qwerkey In', type: 'input', state: 'connected',
+      id: 'input', name: 'IAC Driver Qwerkey In', type: 'input', state: 'connected',
       connection: 'open', manufacturer: 'Test', version: '1',
       open() { return Promise.resolve(this); },
     };
     const output = {
-      ...input, id: 'output', name: 'Qwerkey Out', type: 'output',
+      ...input, id: 'output', name: 'IAC Driver Qwerkey Out', type: 'output',
       send(data) { window.midiMessages.push(Array.from(data)); },
     };
     const otherInput = { ...input, id: 'other-input', name: 'Other In' };
@@ -148,8 +148,8 @@ test('removes the computer key release class after three seconds', async ({ page
 for (const mode of ['both', 'input', 'output', 'other', 'none', 'denied', 'unsupported']) {
   test(`port selectors use independent defaults: ${mode}`, async ({ page }) => {
     await openApp(page, mode);
-    await expect(page.getByLabel('Input', { exact: true })).toHaveValue(['both', 'input'].includes(mode) ? 'input' : '');
-    await expect(page.getByLabel('Output', { exact: true })).toHaveValue(['both', 'output'].includes(mode) ? 'output' : '');
+    await expect(page.locator('#midi-input')).toHaveValue(['both', 'input'].includes(mode) ? 'input' : '');
+    await expect(page.locator('#midi-output')).toHaveValue(['both', 'output'].includes(mode) ? 'output' : '');
     await expect(page.locator('#midi-input option').first()).toHaveText('-- Choose MIDI port --');
     if (mode === 'other') await expect(page.locator('#midi-input option')).toHaveCount(2);
   });
@@ -158,30 +158,30 @@ for (const mode of ['both', 'input', 'output', 'other', 'none', 'denied', 'unsup
 test('switches routing, releases old notes, and supports deselection', async ({ page }) => {
   await openApp(page, 'multiple');
   await page.keyboard.down('y');
-  await page.getByLabel('Output', { exact: true }).selectOption('other-output');
+  await page.locator('#midi-output').selectOption('other-output');
   expect(await page.evaluate(() => window.midiMessages)).toEqual([[144, 69, 64], [128, 69, 64]]);
   await page.keyboard.up('y');
   await page.locator('#midi-output').evaluate(element => element.blur());
   await page.keyboard.press('t');
   expect(await page.evaluate(() => window.otherMessages)).toEqual([[144, 65, 64], [128, 65, 64]]);
-  await page.getByLabel('Output', { exact: true }).selectOption('');
+  await page.locator('#midi-output').selectOption('');
   await page.locator('#midi-output').evaluate(element => element.blur());
   await page.keyboard.press('y');
   expect(await page.evaluate(() => window.otherMessages)).toHaveLength(2);
   await page.evaluate(() => window.receiveNote([144, 69, 100]));
-  await page.getByLabel('Input', { exact: true }).selectOption('other-input');
+  await page.locator('#midi-input').selectOption('other-input');
   await expect(page.locator('.key_active')).toHaveCount(0);
   expect(await page.evaluate(() => window.testMidi.input.onmidimessage)).toBeNull();
   await page.evaluate(() => window.testMidi.otherInput.onmidimessage({ data: new Uint8Array([144, 65, 100]) }));
   await expect(page.locator('.piano_keys .key_65')).toHaveClass(/key_active/);
-  await page.getByLabel('Input', { exact: true }).selectOption('');
+  await page.locator('#midi-input').selectOption('');
   await expect(page.locator('.key_active')).toHaveCount(0);
 });
 
 test('refreshes devices without overriding choices and clears disconnected selections', async ({ page }) => {
   await openApp(page, 'multiple');
-  await page.getByLabel('Input', { exact: true }).selectOption('other-input');
-  await page.getByLabel('Output', { exact: true }).selectOption('');
+  await page.locator('#midi-input').selectOption('other-input');
+  await page.locator('#midi-output').selectOption('');
   await page.evaluate(() => {
     const { access, otherInput } = window.testMidi;
     access.outputs.set('new', { ...window.testMidi.output, id: 'new', name: 'New Out' });
@@ -197,7 +197,7 @@ test('refreshes devices without overriding choices and clears disconnected selec
 
 test('dropdown keyboard navigation does not play notes', async ({ page }) => {
   await openApp(page, 'multiple');
-  await page.getByLabel('Output', { exact: true }).focus();
+  await page.locator('#midi-output').focus();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('y');
   await page.keyboard.press('Tab');
@@ -206,7 +206,7 @@ test('dropdown keyboard navigation does not play notes', async ({ page }) => {
   await expect(page.locator('.key_active')).toHaveCount(0);
 });
 
-test('places port controls below the piano and stacks them on mobile', async ({ page }) => {
+test('places port controls below the piano within the minimum page width', async ({ page }) => {
   await openApp(page);
   const controls = page.locator('.midi_ports');
   const output = page.locator('.midi_port').first();
@@ -219,9 +219,26 @@ test('places port controls below the piano and stacks them on mobile', async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   const outputBox = await output.boundingBox();
   const inputBox = await input.boundingBox();
-  expect(inputBox.y).toBeGreaterThan(outputBox.y + outputBox.height);
-  expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(390);
+  expect(inputBox.y).toBe(outputBox.y);
+  expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(667);
   await controls.screenshot({ path: '/tmp/qwerkey-ports-mobile.png' });
+});
+
+test('Audio reserves the MIDI row only above 667px', async ({ page }) => {
+  await page.setViewportSize({ width: 668, height: 900 });
+  await openApp(page, 'both', false);
+  await page.locator('#enabler').click();
+  const layout = () => page.locator('.mode_switch, .computer_keys, .piano_scroll, .midi_ports')
+    .evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
+  const audioLayout = await layout();
+  await expect(page.getByRole('combobox')).toHaveCount(0);
+  await page.locator('#midi-mode').click();
+  await expect(page.getByRole('combobox')).toHaveCount(2);
+  expect(await layout()).toEqual(audioLayout);
+  await page.locator('#audio-mode').click();
+  expect(await layout()).toEqual(audioLayout);
+  await page.setViewportSize({ width: 667, height: 900 });
+  expect(await page.locator('.midi_ports').evaluate(row => row.getClientRects().length)).toBe(0);
 });
 
 test('defaults to Audio behind the splash and delays MIDI access', async ({ page }) => {
@@ -240,9 +257,7 @@ test('defaults to Audio behind the splash and delays MIDI access', async ({ page
   expect(switchBox.y + switchBox.height).toBeLessThan(keyboardBox.y);
   await page.screenshot({ path: '/tmp/qwerkey-audio-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobileBox = await page.locator('.mode_switch').boundingBox();
-  expect(mobileBox.x).toBeGreaterThanOrEqual(0);
-  expect(mobileBox.x + mobileBox.width).toBeLessThanOrEqual(390);
+  await expect(page.locator('.mode_switch')).toBeHidden();
 });
 
 test('switching releases audio and MIDI notes and preserves selected ports', async ({ page }) => {
@@ -255,7 +270,7 @@ test('switching releases audio and MIDI notes and preserves selected ports', asy
       return cancel.apply(this, args);
     };
   });
-  await page.getByLabel('Output', { exact: true }).selectOption('other-output');
+  await page.locator('#midi-output').selectOption('other-output');
   await page.locator('#audio-mode').click();
   await page.keyboard.down('y');
   await page.locator('#midi-mode').click();
@@ -306,4 +321,18 @@ test('Safari blocks MIDI with an alert for pointer and keyboard activation', asy
   expect(alerts[0]).toContain('unavailable in Safari');
   await expect(page.locator('#audio-mode')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => window.midiRequests)).toBe(0);
+});
+
+test('pointer and keyboard share MIDI notes and every piano pitch can play', async ({ page }) => {
+  await openApp(page);
+  await page.keyboard.down('y');
+  await page.locator('.piano_keys .key_69').hover();
+  await page.mouse.down();
+  await page.keyboard.up('y');
+  expect(await page.evaluate(() => window.midiMessages)).toEqual([[144, 69, 64]]);
+  await page.mouse.up();
+  await page.locator('.piano_keys .key_42').click();
+  expect(await page.evaluate(() => window.midiMessages)).toEqual([
+    [144, 69, 64], [128, 69, 64], [144, 42, 64], [128, 42, 64],
+  ]);
 });
