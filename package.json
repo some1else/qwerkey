@@ -1,12 +1,11 @@
 {
   "name": "qwerkey",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "repository": {
     "url": "git@github.com:Some1Else/qwerkey.git",
     "type": "git"
   },
   "author": "Srđan Prodanović <srdjan.prodanovic@gmail.com>",
-  "license": "MIT",
   "devDependencies": {
     "@playwright/test": "1.65.0",
     "typescript": "^7.0.2",
