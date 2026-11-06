@@ -36,8 +36,14 @@ a subdirectory.
 The app uses strict TypeScript, native DOM APIs, and the browser Web MIDI API.
 Run `npm run typecheck` to check browser code, or `npm run build` to check and
 bundle it with Vite. Keyboard presses send MIDI notes on channel 1 to `Qwerkey Out`.
-Incoming notes from `Qwerkey In` highlight the keyboards. Input and output
-ports are optional and work independently. Use a browser with Web MIDI support
+Incoming notes from the selected input highlight the keyboards. The Output and
+Input dropdowns below the piano list available MIDI ports. Each defaults to
+`Qwerkey Out` or `Qwerkey In` respectively when present; otherwise it shows
+`-- Choose MIDI port --`. Choose any available port, or choose the placeholder
+to disable that direction. Changes apply immediately and selections last for
+the current page session. Device changes refresh the lists without overriding
+manual choices; disconnecting a selected port returns it to the placeholder.
+Input and output ports are optional and work independently. Use a browser with Web MIDI support
 and serve over HTTPS or localhost for MIDI access.
 
 Run `npm test` to build and run the small Playwright suite in Chromium. It tests

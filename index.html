@@ -1,5 +1,6 @@
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script type="module" src="./src/main.ts"></script>
 <link  href='./css/app.css' rel='stylesheet' />
@@ -10,6 +11,10 @@
 <br><br><br>
 <p><div class='keys computer_keys'></div></p>
 <p><div class='keys piano_keys'></div></p>
+<div class="midi_ports">
+  <div class="midi_port"><label for="midi-output">Output</label><span class="midi_select"><select id="midi-output"><option value="">-- Choose MIDI port --</option></select></span></div>
+  <div class="midi_port"><label for="midi-input">Input</label><span class="midi_select"><select id="midi-input"><option value="">-- Choose MIDI port --</option></select></span></div>
+</div>
 </center>
 </body>
 </html>

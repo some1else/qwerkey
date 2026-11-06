@@ -178,3 +178,56 @@ a {
 	background-color: orange;
 	transition: background-color 0s;
 }
+
+.midi_ports {
+	box-sizing: border-box;
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 1rem 2rem;
+	margin: 0 auto 3rem;
+	padding: 0 1rem;
+	max-width: 700px;
+	font-size: .8125rem;
+}
+.midi_port {
+	display: flex;
+	align-items: center;
+	gap: .75rem;
+	flex: 1 1 0;
+	min-width: 0;
+}
+.midi_port label { font-size: inherit; font-weight: bold; }
+.midi_select { position: relative; flex: 1; min-width: 0; }
+.midi_select::after {
+	content: '';
+	position: absolute;
+	right: .75rem;
+	top: 50%;
+	width: .4rem;
+	height: .4rem;
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	transform: translateY(-75%) rotate(45deg);
+	pointer-events: none;
+}
+.midi_select select {
+	appearance: none;
+	box-sizing: border-box;
+	width: 100%;
+	padding: .5rem 2rem .5rem .75rem;
+	border: 2px solid #eee;
+	border-radius: .375rem;
+	background: #222;
+	color: white;
+	font: inherit;
+	line-height: 1.25rem;
+	text-align: center;
+	cursor: pointer;
+}
+.midi_select select:focus-visible { outline: 3px solid orange; outline-offset: 3px; }
+@media (max-width: 40rem) {
+	.midi_ports { flex-direction: column; align-items: center; }
+	.midi_port { flex: none; width: 100%; }
+	.midi_port label { width: 3.5rem; text-align: left; }
+}

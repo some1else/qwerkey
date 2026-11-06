@@ -1,5 +1,5 @@
 import { mappings, type KeyMapping } from './layout';
-import { createMidi } from './midi';
+import { createMidi, type MidiPorts } from './midi';
 
 const ACTIVITY_MS = 3000;
 const byCode = new Map(mappings.map(key => [key.code, key]));
@@ -62,9 +62,34 @@ function drawKeyboard() {
 const midi = createMidi((pitch, active) => {
   // Preserve the first matching mapping for pitches shared by multiple keys.
   setKeyActive(mappings.find(key => key.noteNumber === pitch), active);
-});
+}, renderPorts);
+
+function renderPorts(ports: MidiPorts) {
+  for (const [id, available, selected] of [
+    ['midi-input', ports.inputs, ports.inputId],
+    ['midi-output', ports.outputs, ports.outputId],
+  ] as const) {
+    const select = document.getElementById(id) as HTMLSelectElement | null;
+    if (!select) continue;
+    select.replaceChildren(new Option('-- Choose MIDI port --', ''));
+    for (const port of available) select.add(new Option(port.name || port.id, port.id));
+    select.value = selected;
+  }
+}
 
 function handleKeyboard(event: KeyboardEvent, active: boolean) {
+  if (event.target instanceof Element && event.target.closest('select, input, textarea, button, [contenteditable]')) {
+    // Still release a musical key that was pressed before focus moved here.
+    if (!active) {
+      const held = byCode.get(event.keyCode);
+      if (held?.pressed) {
+        held.pressed = false;
+        midi.sendNote(held.noteNumber, false);
+        setKeyActive(held, false);
+      }
+    }
+    return;
+  }
   const key = byCode.get(event.keyCode);
   if (!key) {
     event.preventDefault();
@@ -79,6 +104,12 @@ function handleKeyboard(event: KeyboardEvent, active: boolean) {
 
 function start() {
   drawKeyboard();
+  document.getElementById('midi-input')?.addEventListener('change', event => {
+    midi.selectInput((event.target as HTMLSelectElement).value);
+  });
+  document.getElementById('midi-output')?.addEventListener('change', event => {
+    midi.selectOutput((event.target as HTMLSelectElement).value);
+  });
   document.addEventListener('keydown', event => handleKeyboard(event, true));
   document.addEventListener('keyup', event => handleKeyboard(event, false));
   void midi.connect();
