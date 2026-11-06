@@ -7,13 +7,9 @@
   },
   "author": "Srđan Prodanović <srdjan.prodanovic@gmail.com>",
   "license": "MIT",
-  "dependencies": {
-    "jquery": "3.7.1",
-    "underscore": "1.13.8",
-    "webmidi": "2.0.0-rc.2"
-  },
   "devDependencies": {
     "@playwright/test": "1.65.0",
+    "typescript": "^7.0.2",
     "vite": "8.3.6"
   },
   "private": true,
@@ -23,8 +19,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "test": "npm run build && playwright test"
+    "test": "npm run build && playwright test",
+    "typecheck": "tsc --noEmit"
   }
 }
