@@ -41,6 +41,10 @@ keyboards to switch modes. Switching releases held notes. MIDI access is
 requested when MIDI mode is first selected. Safari keeps Audio selected and
 shows an explanation when its unavailable MIDI segment is activated.
 
+Audio voices share a mixer at half gain, followed by a compressor and a fast
+limiter. A final safety ceiling bounds output samples to -1 dBFS, including
+transients and dense chords.
+
 In MIDI mode, keyboard presses send MIDI notes on channel 1 to `Qwerkey Out`.
 Incoming notes from the selected input highlight the keyboards. The Output and
 Input dropdowns below the piano, visible in MIDI mode, list available MIDI ports. Each defaults to

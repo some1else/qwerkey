@@ -17,7 +17,40 @@ const voices: VoiceSettings[] = [
   { volume: 0.42, attack: 0.01, decay: 0.1, sustain: 0.4, hold: 32, release: 0.15, filtered: true },
 ];
 
-function startVoice(context: AudioContext, frequency: number, settings: VoiceSettings): Voice {
+function createMixer(context: AudioContext): GainNode {
+  const mixer = context.createGain();
+  mixer.gain.value = 0.5;
+
+  const compressor = context.createDynamicsCompressor();
+  compressor.threshold.value = -18;
+  compressor.knee.value = 24;
+  compressor.ratio.value = 4;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.2;
+
+  const limiter = context.createDynamicsCompressor();
+  limiter.threshold.value = -1;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0;
+  limiter.release.value = 0.05;
+
+  // DynamicsCompressorNode has a finite ratio and can overshoot. WaveShaper
+  // clamps inputs outside [-1, 1] to the curve endpoints, guaranteeing a
+  // -1 dBFS sample ceiling even during transients or extreme polyphony.
+  const ceiling = context.createWaveShaper();
+  const peak = 10 ** (-1 / 20);
+  ceiling.curve = new Float32Array([-peak, 0, peak]);
+  ceiling.oversample = 'none';
+
+  mixer.connect(compressor);
+  compressor.connect(limiter);
+  limiter.connect(ceiling);
+  ceiling.connect(context.destination);
+  return mixer;
+}
+
+function startVoice(context: AudioContext, output: AudioNode, frequency: number, settings: VoiceSettings): Voice {
   const oscillator = context.createOscillator();
   oscillator.type = 'sine';
   oscillator.frequency.value = frequency;
@@ -48,7 +81,7 @@ function startVoice(context: AudioContext, frequency: number, settings: VoiceSet
   } else {
     oscillator.connect(gain);
   }
-  gain.connect(context.destination);
+  gain.connect(output);
   let ended = false;
   oscillator.onended = () => {
     ended = true;
@@ -83,17 +116,21 @@ function startVoice(context: AudioContext, frequency: number, settings: VoiceSet
 
 export function createSynth() {
   let context: AudioContext | undefined;
+  let mixer: GainNode | undefined;
   const heldNotes = new Map<number, Voice[]>();
 
   async function enable() {
-    context ??= new AudioContext();
+    if (!context) {
+      context = new AudioContext();
+      mixer = createMixer(context);
+    }
     await context.resume();
     if (context.state !== 'running') throw new Error('Audio is suspended');
   }
 
   function play(key: number, frequency: number) {
-    if (!context || context.state !== 'running' || heldNotes.has(key)) return;
-    heldNotes.set(key, voices.map(settings => startVoice(context!, frequency, settings)));
+    if (!context || !mixer || context.state !== 'running' || heldNotes.has(key)) return;
+    heldNotes.set(key, voices.map(settings => startVoice(context!, mixer!, frequency, settings)));
   }
 
   function release(key: number) {
