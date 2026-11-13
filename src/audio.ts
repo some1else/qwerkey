@@ -44,7 +44,7 @@ function createMixer(context: AudioContext): GainNode {
   const ceiling = context.createWaveShaper();
   const peak = 10 ** (-1 / 20);
   ceiling.curve = new Float32Array([-peak, 0, peak]);
-  ceiling.oversample = '4x';
+  ceiling.oversample = 'none';
 
   mixer.connect(compressor);
   compressor.connect(limiter);
