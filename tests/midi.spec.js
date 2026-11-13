@@ -224,14 +224,14 @@ test('places port controls below the piano within the minimum page width', async
   await controls.screenshot({ path: '/tmp/qwerkey-ports-mobile.png' });
 });
 
-test('Audio reserves the MIDI row only above 667px', async ({ page }) => {
+test('Audio and MIDI share a stable controls row above 667px', async ({ page }) => {
   await page.setViewportSize({ width: 668, height: 900 });
   await openApp(page, 'both', false);
   await page.locator('#enabler').click();
   const layout = () => page.locator('.mode_switch, .computer_keys, .piano_scroll, .midi_ports')
     .evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
   const audioLayout = await layout();
-  await expect(page.getByRole('combobox')).toHaveCount(0);
+  await expect(page.getByRole('combobox')).toHaveCount(1);
   await page.locator('#midi-mode').click();
   await expect(page.getByRole('combobox')).toHaveCount(2);
   expect(await layout()).toEqual(audioLayout);
@@ -274,7 +274,7 @@ test('switching releases audio and MIDI notes and preserves selected ports', asy
   await page.locator('#audio-mode').click();
   await page.keyboard.down('y');
   await page.locator('#midi-mode').click();
-  expect(await page.evaluate(() => window.releases)).toBe(2);
+  expect(await page.evaluate(() => window.releases)).toBe(1);
   expect(await page.locator('.key_active, .key_inactive').count()).toBe(0);
   await page.keyboard.up('y');
   await page.keyboard.down('t');

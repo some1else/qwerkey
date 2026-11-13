@@ -41,6 +41,18 @@ keyboards to switch modes. Switching releases held notes. MIDI access is
 requested when MIDI mode is first selected. Safari keeps Audio selected and
 shows an explanation when its unavailable MIDI segment is activated.
 
+In Audio mode, controls below the piano select Sin, Tri, Saw, or Sqr and set
+A/D/R durations in milliseconds and S as a sustain level in dB relative to the
+attack peak. Sustain holds until key release, which starts R immediately.
+The # (Voices) control sets polyphony from 1 to 64, defaulting to 8. When full,
+release tails are reused first, then the oldest held note, with a brief fade.
+Lowering the limit applies immediately.
+Defaults: Tri, A 3 ms, D 800 ms, S -12 dB, R 2200 ms, Freq 440 Hz, Reso 0.7. Envelope changes apply to the next note.
+Oscillator, Freq, and Reso also update held notes. Freq is a lowpass cutoff relative
+to each note: 440 follows its frequency, 880 is one octave above, and 220 is one
+octave below. Reso uses classic linear Q, defaulting to 0.7. Settings survive
+mode changes for the current page session.
+
 Audio voices share a mixer at half gain, followed by a compressor and a fast
 limiter. A final safety ceiling bounds output samples to -1 dBFS, including
 transients and dense chords.

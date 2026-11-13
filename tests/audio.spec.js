@@ -21,6 +21,7 @@ for (const sampleRate of [44100, 48000]) {
     await page.goto('./');
     await page.locator('#enabler').click();
     await expect(page.locator('.overlay')).toBeHidden();
+    await page.locator('#voices').fill('64');
     await page.locator('.piano_keys .key').evaluateAll(keys => {
       keys.forEach((key, index) => {
         key.setPointerCapture = () => {};
@@ -73,7 +74,7 @@ for (const sampleRate of [44100, 48000]) {
     expect(result.graph).toEqual({
       outputs: 1,
       stages: ['GainNode', 'DynamicsCompressorNode', 'DynamicsCompressorNode', 'WaveShaperNode'],
-      voices: 112,
+      voices: 56,
       voiceOutputs: true,
     });
     expect(result.finite).toBe(true);

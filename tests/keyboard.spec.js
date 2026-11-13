@@ -37,7 +37,7 @@ test('highlights chords and releases individual notes', async ({ page }) => {
 });
 
 test('resumes real audio and plays once per held key', async ({ page }) => {
-  // Observe real oscillator creation and release envelope cancellation across both voices.
+  // Observe real oscillator creation and release envelope cancellation for each voice.
   await page.evaluate(() => {
     window.audioCalls = { starts: 0, stops: 0 };
     const start = OscillatorNode.prototype.start;
@@ -60,40 +60,12 @@ test('resumes real audio and plays once per held key', async ({ page }) => {
   await expect(page.locator('.overlay')).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.audioState)).toBe('running');
   await page.keyboard.down('y');
-  await expect.poll(() => page.evaluate(() => window.audioCalls.starts)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.audioCalls.starts)).toBe(1);
   await page.keyboard.down('y');
-  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(2);
+  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(1);
   const stopsBeforeRelease = await page.evaluate(() => window.audioCalls.stops);
   await page.keyboard.up('y');
   await expect.poll(() => page.evaluate(() => window.audioCalls.stops)).toBeGreaterThan(stopsBeforeRelease);
-});
-
-test('preserves both voice envelopes and the lowpass sweep', async ({ page }) => {
-  await page.evaluate(() => {
-    window.ramps = [];
-    window.pitches = [];
-    const ramp = AudioParam.prototype.linearRampToValueAtTime;
-    AudioParam.prototype.linearRampToValueAtTime = function (value, time) {
-      window.ramps.push([value, time]);
-      return ramp.call(this, value, time);
-    };
-    const start = OscillatorNode.prototype.start;
-    OscillatorNode.prototype.start = function (...args) {
-      window.pitches.push(this.frequency.value);
-      return start.apply(this, args);
-    };
-  });
-  await page.locator('#enabler').click();
-  await page.keyboard.down('y');
-  expect(await page.evaluate(() => window.pitches)).toEqual([440, 440]);
-  const ramps = await page.evaluate(() => window.ramps);
-  for (const value of [0.66, 0.42, 0.168, 6, 2000]) {
-    expect(ramps.some(([actual]) => Math.abs(actual - value) < 0.000001)).toBe(true);
-  }
-  const filterStart = ramps.find(([value]) => value === 6)[1];
-  const filterEnd = ramps.find(([value]) => value === 2000)[1];
-  expect(filterEnd - filterStart).toBeCloseTo(3);
-  await page.keyboard.up('y');
 });
 
 test('releases and cleans up old voices while a retrigger keeps playing', async ({ page }) => {
@@ -111,12 +83,12 @@ test('releases and cleans up old voices while a retrigger keeps playing', async 
   await page.keyboard.down('y');
   await page.keyboard.up('y');
   await page.keyboard.down('y');
-  await expect.poll(() => page.evaluate(() => window.oscillators.length)).toBe(4);
-  // The old voices and new percussive voice finish. The new soft voice sustains.
-  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(3);
+  await expect.poll(() => page.evaluate(() => window.oscillators.length)).toBe(2);
+  // The old voice finishes while the retriggered voice sustains.
+  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(1);
   await expect(page.locator('.computer_keys .key_6_3')).toHaveClass(/key_active/);
   await page.keyboard.up('y');
-  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(4);
+  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(2);
 });
 
 test('clears the release highlight after three seconds', async ({ page }) => {

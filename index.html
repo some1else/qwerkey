@@ -25,9 +25,22 @@
   <div class='keys piano_keys'></div>
 </div>
 
+<div class="sound_controls">
+<div class="audio_parameters" role="group" aria-label="Audio parameters">
+  <label>Oscillator<select id="oscillator" aria-label="Oscillator"><option value="sine">Sin</option><option value="triangle" selected>Tri</option><option value="sawtooth">Saw</option><option value="square">Sqr</option></select></label>
+  <label for="voices" title="Maximum simultaneous voices"># (Voices)<input id="voices" type="number" min="1" max="64" step="1" value="8"></label>
+  <label for="attack" title="Attack duration">A (ms)<input id="attack" type="number" min="0" max="10000" step="1" value="3"></label>
+  <label for="decay" title="Decay duration">D (ms)<input id="decay" type="number" min="0" max="10000" step="1" value="800"></label>
+  <label for="sustain" title="Sustain level in decibels relative to the attack peak">S (dB)<input id="sustain" type="number" min="-96" max="0" step="0.1" value="-12"></label>
+  <label for="release" title="Release duration">R (ms)<input id="release" type="number" min="0" max="10000" step="1" value="2200"></label>
+  <label for="frequency" title="Lowpass cutoff: 440 follows the played note; 880 is one octave above">Freq (Hz)<input id="frequency" type="number" min="1" max="20000" step="1" value="440"></label>
+  <label for="resonance" title="Lowpass resonance in classic Q">Reso (Q)<input id="resonance" type="number" min="0.1" max="30" step="0.1" value="0.7"></label>
+</div>
 <div class="midi_ports" hidden>
   <div class="midi_port"><label for="midi-output">OUT</label><span class="midi_select"><select id="midi-output"><option value="">-- Choose MIDI port --</option></select></span></div>
   <div class="midi_port"><label for="midi-input">IN</label><span class="midi_select"><select id="midi-input"><option value="">-- Choose MIDI port --</option></select></span></div>
+</div>
+
 </div>
 
 </center>
