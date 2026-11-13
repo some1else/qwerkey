@@ -64,10 +64,10 @@ test('mouse press plays immediately and releases outside the key', async ({ page
   const box = await page.locator('.computer_keys .key_6_3 .kc').boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 2, releases: 0 });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 0 });
   await page.mouse.move(1, 1);
   await page.mouse.up();
-  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 2, releases: 2 });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 1 });
   await expect(page.locator('.key_active')).toHaveCount(0);
 });
 
@@ -85,12 +85,12 @@ test('two real touch contacts form a chord and release independently', async ({ 
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [points[0]] });
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points });
   await expect(page.locator('.piano_keys .key_active')).toHaveCount(2);
-  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 4, releases: 0 });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 2, releases: 0 });
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [points[0]] });
   await expect(page.locator('.piano_keys .key_65')).toHaveClass(/key_active/);
-  expect(await page.evaluate(() => window.audioCalls.releases)).toBe(2);
+  expect(await page.evaluate(() => window.audioCalls.releases)).toBe(1);
   await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-  expect(await page.evaluate(() => window.audioCalls.releases)).toBe(4);
+  expect(await page.evaluate(() => window.audioCalls.releases)).toBe(2);
   await expect(page.locator('.key_active')).toHaveCount(0);
   // Swipe in the strip below the playable keys without starting another note.
   const piano = await page.locator('.piano_keys').boundingBox();
@@ -101,7 +101,7 @@ test('two real touch contacts form a chord and release independently', async ({ 
   }
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect.poll(() => page.evaluate(() => window.scrollX)).toBeGreaterThan(0);
-  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 4, releases: 4 });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 2, releases: 2 });
   expect(await page.pageErrors()).toEqual([]);
   await context.close();
 });
@@ -116,9 +116,9 @@ test('keyboard and two pointers share one pitch until the final release', async 
   await page.keyboard.up('y');
   await expect(page.locator('.piano_keys .key_69')).toHaveClass(/key_active/);
   await key.dispatchEvent('pointerup', { pointerId: 10 });
-  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 2, releases: 0 });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 0 });
   await key.dispatchEvent('lostpointercapture', { pointerId: 11 });
-  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 2, releases: 2 });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 1 });
 });
 
 for (const cleanup of ['blur', 'pagehide', 'visibility', 'mode']) {
@@ -127,7 +127,7 @@ for (const cleanup of ['blur', 'pagehide', 'visibility', 'mode']) {
     const key = page.locator('.piano_keys .key_42');
     await key.hover();
     await page.mouse.down();
-    expect(await page.evaluate(() => window.audioCalls.starts)).toBe(2);
+    expect(await page.evaluate(() => window.audioCalls.starts)).toBe(1);
     if (cleanup === 'mode') await page.locator('#midi-mode').dispatchEvent('click');
     else if (cleanup === 'visibility') await page.evaluate(() => {
       Object.defineProperty(document, 'hidden', { configurable: true, value: true });
@@ -135,8 +135,8 @@ for (const cleanup of ['blur', 'pagehide', 'visibility', 'mode']) {
     });
     else await page.evaluate(event => window.dispatchEvent(new Event(event)), cleanup);
     await expect(page.locator('.key_active')).toHaveCount(0);
-    expect(await page.evaluate(() => window.audioCalls.releases)).toBe(2);
+    expect(await page.evaluate(() => window.audioCalls.releases)).toBe(1);
     await page.mouse.up();
-    expect(await page.evaluate(() => window.audioCalls.releases)).toBe(2);
+    expect(await page.evaluate(() => window.audioCalls.releases)).toBe(1);
   });
 }

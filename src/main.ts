@@ -1,4 +1,4 @@
-import { createSynth } from './audio';
+import { createSynth, defaultParameters, type SynthParameters } from './audio';
 import { mappings, type KeyMapping } from './layout';
 import { createMidi, type MidiPorts } from './midi';
 
@@ -191,12 +191,26 @@ function selectMode(next: Mode) {
     document.getElementById('audio-mode')?.setAttribute('aria-pressed', String(mode === 'audio'));
     document.getElementById('midi-mode')?.setAttribute('aria-pressed', String(mode === 'midi'));
     document.querySelector<HTMLElement>('.midi_ports')!.hidden = mode !== 'midi';
+    document.querySelector<HTMLElement>('.audio_parameters')!.hidden = mode !== 'audio';
   }
   document.getElementById('instrument')?.focus();
 }
 
 function start() {
   drawKeyboard();
+  const oscillator = document.getElementById('oscillator') as HTMLSelectElement;
+  oscillator.value = defaultParameters.oscillator;
+  oscillator.addEventListener('change', () => {
+    synth.setParameters({ oscillator: oscillator.value as OscillatorType });
+  });
+  for (const parameter of ['voices', 'attack', 'decay', 'sustain', 'release', 'frequency', 'resonance'] as const) {
+    const input = document.getElementById(parameter) as HTMLInputElement;
+    input.value = String(defaultParameters[parameter]);
+    input.addEventListener('input', () => {
+      if (!input.validity.valid || !Number.isFinite(input.valueAsNumber)) return;
+      synth.setParameters({ [parameter]: input.valueAsNumber } as Partial<SynthParameters>);
+    });
+  }
   document.getElementById('midi-input')?.addEventListener('change', event => {
     midi.selectInput((event.target as HTMLSelectElement).value);
   });

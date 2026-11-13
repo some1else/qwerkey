@@ -292,19 +292,61 @@ a {
 }
 .piano_scroll:focus-visible { outline: 2px solid orange; outline-offset: -2px; }
 
+/* Both modes share the same row below the piano. */
+.sound_controls {
+  display: grid;
+  margin: 2rem auto 0;
+  padding: 0 1rem;
+  max-width: 36rem;
+}
+.sound_controls > * { grid-area: 1 / 1; }
+.midi_ports { width: 100%; margin-top: 0; align-self: center; }
+.audio_parameters {
+  display: flex;
+  justify-content: center;
+  gap: .5rem;
+  color: #999;
+  font-size: .75rem;
+}
+.audio_parameters label {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.audio_parameters label:first-child { flex: 1.2; }
+.audio_parameters input, .audio_parameters select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: .5rem .25rem;
+  border: 1px solid #777;
+  border-radius: .375rem;
+  background: #222;
+  color: white;
+  font: inherit;
+  text-align: center;
+  color-scheme: dark;
+}
+.audio_parameters input:focus-visible, .audio_parameters select:focus-visible {
+  outline: 3px solid orange;
+  outline-offset: 3px;
+}
 @media (width > 667px) {
-	/* Keep the MIDI row's footprint when Audio mode hides its controls. */
-	.midi_ports[hidden] {
-		display: flex !important;
-		visibility: hidden;
-	}
+  .sound_controls > [hidden] {
+    display: flex !important;
+    visibility: hidden;
+  }
 }
 
 @media (max-width: 667px) {
 	.mode_switch { display: none; }
 	.computer_keys { margin-top: 0; }
 	.piano_scroll { margin-top: 1.5rem; }
-	.midi_ports { margin-top: 1rem; }
+	.sound_controls { margin-top: 1rem; }
+	.audio_parameters input, .audio_parameters select { min-height: 44px; }
 	.midi_port select, .mode_switch button { min-height: 44px; }
 	.computer_keys .hz { right: .2rem; font-size: .4375rem; }
 	.computer_keys .note { left: 0; padding: 0 .1rem; }
