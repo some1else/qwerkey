@@ -182,6 +182,7 @@ export function createSynth() {
   let mixer: GainNode | undefined;
   const heldNotes = new Map<number, Voice>();
   const activeVoices = new Set<Voice>();
+  let disposed = false;
 
   function stealOldest() {
     const held = new Set(heldNotes.values());
@@ -197,11 +198,13 @@ export function createSynth() {
   }
 
   async function enable() {
+    if (disposed) return;
     if (!context) {
       context = createContext();
       mixer = createMixer(context);
     }
     await context.resume();
+    if (disposed) return;
     if (context.state !== 'running') throw new Error('Audio is suspended');
   }
 
@@ -225,5 +228,14 @@ export function createSynth() {
     for (const voice of heldNotes.values()) voice.tune(parameters);
   }
 
-  return { enable, play, release, setParameters };
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    for (const voice of activeVoices) voice.steal();
+    activeVoices.clear();
+    heldNotes.clear();
+    if (context && context.state !== 'closed') void context.close().catch(() => {});
+  }
+
+  return { enable, play, release, setParameters, dispose };
 }

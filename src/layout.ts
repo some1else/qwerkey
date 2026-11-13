@@ -11,7 +11,6 @@ export interface KeyMapping extends KeyDefinition {
   noteNumber: number;
   frequency: number;
   colorClass: string;
-  timeout?: number;
 }
 
 const definitions: Record<string, KeyDefinition> = {
@@ -73,7 +72,7 @@ const definitions: Record<string, KeyDefinition> = {
 	
 };
 
-export const mappings: KeyMapping[] = Object.values(definitions).map(key => {
+export const mappings: readonly Readonly<KeyMapping>[] = Object.values(definitions).map(key => {
   const noteNumber = 36 + key.x * 4 + key.y * 3;
   return {
     ...key,
