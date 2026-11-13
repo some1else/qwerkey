@@ -96,8 +96,8 @@ test('uses the requested defaults and holds sustain at relative dB until release
   for (const [index, time] of [0, .009, 1.809].entries()) {
     expect(ramps[index].time).toBeCloseTo(time, 3);
   }
-  expect(ramps[1].value).toBeCloseTo(.33);
-  expect(ramps[2].value).toBeCloseTo(.33 * 10 ** (-12 / 20), 6);
+  expect(ramps[1].value).toBeCloseTo(1 / 12, 6);
+  expect(ramps[2].value).toBeCloseTo((1 / 12) * 10 ** (-12 / 20), 6);
   // Move beyond the old automatic sustain timeout before releasing.
   await page.evaluate(() => {
     Object.defineProperty(window.oscillators[0].context, 'currentTime', { get: () => 120 });
@@ -109,7 +109,7 @@ test('uses the requested defaults and holds sustain at relative dB until release
   }));
   expect(result.release.time).toBeCloseTo(122.2);
   expect(result.release.value).toBe(.0001);
-  expect(result.gain).toBeCloseTo(.33 * 10 ** (-12 / 20), 6);
+  expect(result.gain).toBeCloseTo((1 / 12) * 10 ** (-12 / 20), 6);
 });
 
 test('converts edited sustain dB to amplitude and releases during attack', async ({ page }) => {
@@ -123,7 +123,7 @@ test('converts edited sustain dB to amplitude and releases during attack', async
   expect(ramps).toHaveLength(3);
   expect(ramps[1].time).toBeCloseTo(.02, 3);
   expect(ramps[2].time).toBeCloseTo(.1, 3);
-  expect(ramps[2].value).toBeCloseTo(.33 * 10 ** (-6 / 20), 6);
+  expect(ramps[2].value).toBeCloseTo((1 / 12) * 10 ** (-6 / 20), 6);
   await page.keyboard.up('y');
   const release = await page.evaluate(() => window.ramps.at(-1));
   expect(release.time).toBeCloseTo(.05);

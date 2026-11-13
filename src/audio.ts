@@ -20,16 +20,56 @@ interface Voice {
   tune(parameters: SynthParameters): void;
 }
 
+// Twelve voices at their attack peak sum to 0 dBFS at the mixer input.
+const voiceLevel = 1 / 12;
+// Makeup after the bus compressor (+4 dB). Twelve simultaneous square voices
+// still peak ~3.7 dB under the limiter, so the limiter and clip stages only
+// catch abnormal overloads instead of shaping ordinary chords.
+const makeupGain = 1.6;
+// Run the whole graph, dynamics included, well above the device rate; the
+// browser resamples to the output device.
+const oversampledRate = 192000;
+
+function createContext(): AudioContext {
+  try {
+    return new AudioContext({ sampleRate: oversampledRate });
+  } catch {
+    return new AudioContext();
+  }
+}
+
+function softClipCurve(peak: number): Float32Array<ArrayBuffer> {
+  const knee = 10 ** (-3 / 20);
+  const range = peak - knee;
+  // Scale the tanh shoulder so full-scale input lands exactly on the peak.
+  const fullScale = Math.tanh((1 - knee) / range);
+  const curve = new Float32Array(4096);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    const magnitude = Math.abs(x);
+    // Linear below the knee, then a smooth tanh shoulder up to the peak.
+    const y = magnitude <= knee
+      ? magnitude
+      : knee + range * Math.tanh((magnitude - knee) / range) / fullScale;
+    curve[i] = Math.sign(x) * y;
+  }
+  return curve;
+}
+
 function createMixer(context: AudioContext): GainNode {
   const mixer = context.createGain();
-  mixer.gain.value = 0.25;
+  mixer.gain.value = 1;
 
   const compressor = context.createDynamicsCompressor();
-  compressor.threshold.value = -18;
-  compressor.knee.value = 24;
+  // A low threshold evens out chord density so makeup can lift single notes.
+  compressor.threshold.value = -30;
+  compressor.knee.value = 12;
   compressor.ratio.value = 4;
   compressor.attack.value = 0.003;
   compressor.release.value = 0.2;
+
+  const makeup = context.createGain();
+  makeup.gain.value = makeupGain;
 
   const limiter = context.createDynamicsCompressor();
   limiter.threshold.value = -1;
@@ -38,17 +78,25 @@ function createMixer(context: AudioContext): GainNode {
   limiter.attack.value = 0;
   limiter.release.value = 0.05;
 
-  // DynamicsCompressorNode has a finite ratio and can overshoot. WaveShaper
-  // clamps inputs outside [-1, 1] to the curve endpoints, guaranteeing a
-  // -1 dBFS sample ceiling even during transients or extreme polyphony.
-  const ceiling = context.createWaveShaper();
   const peak = 10 ** (-1 / 20);
+  // DynamicsCompressorNode has a finite ratio and can overshoot. An
+  // oversampled soft clip rounds those overshoots off with little aliasing.
+  const softClip = context.createWaveShaper();
+  softClip.curve = softClipCurve(peak);
+  softClip.oversample = '4x';
+
+  // Oversampling's resampling filters can ring past the soft clip's peak, so a
+  // final non-oversampled hard clamp (WaveShaper clamps inputs outside [-1, 1]
+  // to the curve endpoints) guarantees a -1 dBFS sample ceiling.
+  const ceiling = context.createWaveShaper();
   ceiling.curve = new Float32Array([-peak, 0, peak]);
   ceiling.oversample = 'none';
 
   mixer.connect(compressor);
-  compressor.connect(limiter);
-  limiter.connect(ceiling);
+  compressor.connect(makeup);
+  makeup.connect(limiter);
+  limiter.connect(softClip);
+  softClip.connect(ceiling);
   ceiling.connect(context.destination);
   return mixer;
 }
@@ -63,7 +111,7 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
   const attack = settings.attack / 1000;
   const decay = settings.decay / 1000;
   const release = settings.release / 1000;
-  const volume = 0.33;
+  const volume = voiceLevel;
   const sustain = volume * 10 ** (settings.sustain / 20);
   // Tiny offsets keep zero-duration envelope stages ordered.
   const points = [
@@ -150,7 +198,7 @@ export function createSynth() {
 
   async function enable() {
     if (!context) {
-      context = new AudioContext();
+      context = createContext();
       mixer = createMixer(context);
     }
     await context.resume();

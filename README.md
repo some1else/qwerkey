@@ -47,15 +47,18 @@ attack peak. Sustain holds until key release, which starts R immediately.
 The # (Voices) control sets polyphony from 1 to 64, defaulting to 8. When full,
 release tails are reused first, then the oldest held note, with a brief fade.
 Lowering the limit applies immediately.
-Defaults: Tri, A 3 ms, D 800 ms, S -12 dB, R 2200 ms, Freq 440 Hz, Reso 0.7. Envelope changes apply to the next note.
+Defaults: Tri, A 9 ms, D 1800 ms, S -12 dB, R 2200 ms, Freq 440 Hz, Reso 0.7. Envelope changes apply to the next note.
 Oscillator, Freq, and Reso also update held notes. Freq is a lowpass cutoff relative
 to each note: 440 follows its frequency, 880 is one octave above, and 220 is one
 octave below. Reso uses classic linear Q, defaulting to 0.7. Settings survive
 mode changes for the current page session.
 
-Audio voices share a mixer at half gain, followed by a compressor and a fast
-limiter. A final safety ceiling bounds output samples to -1 dBFS, including
-transients and dense chords.
+Each audio voice peaks at 1/12 so twelve simultaneous voices reach 0 dBFS at a
+unity-gain mixer. The mixer feeds a compressor, +4 dB makeup gain, and a fast
+limiter. The audio context runs at 192 kHz where supported, oversampling the
+whole chain, and a 4× oversampled soft clip rounds off limiter overshoots. A
+final safety ceiling bounds output samples to -1 dBFS, including transients and
+dense chords.
 
 In MIDI mode, keyboard presses send MIDI notes on channel 1 to `Qwerkey Out`.
 Incoming notes from the selected input highlight the keyboards. The Output and

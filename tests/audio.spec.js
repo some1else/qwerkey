@@ -4,7 +4,8 @@ for (const sampleRate of [44100, 48000]) {
   test(`mixes every voice through dynamics and bounds output at ${sampleRate} Hz`, async ({ page }) => {
     await page.addInitScript(sampleRate => {
       // Render the app's actual audio graph deterministically, without speakers.
-      window.AudioContext = function () {
+      window.AudioContext = function (options) {
+        window.contextOptions = options;
         const context = new OfflineAudioContext(2, sampleRate * 4, sampleRate);
         Object.defineProperty(context, 'state', { get: () => 'running' });
         context.resume = async () => {};
@@ -35,23 +36,31 @@ for (const sampleRate of [44100, 48000]) {
       const edges = window.connections;
       const outputs = edges.filter(([, to]) => to === context.destination);
       const ceiling = outputs[0][0];
-      const limiter = edges.find(([, to]) => to === ceiling)[0];
-      const compressor = edges.find(([, to]) => to === limiter)[0];
+      const softClip = edges.find(([, to]) => to === ceiling)[0];
+      const limiter = edges.find(([, to]) => to === softClip)[0];
+      const makeup = edges.find(([, to]) => to === limiter)[0];
+      const compressor = edges.find(([, to]) => to === makeup)[0];
       const mixer = edges.find(([, to]) => to === compressor)[0];
       const voiceInputs = edges.filter(([, to]) => to === mixer);
       const graph = {
+        contextOptions: window.contextOptions,
         outputs: outputs.length,
-        stages: [mixer, compressor, limiter, ceiling].map(node => node.constructor.name),
+        stages: [mixer, compressor, makeup, limiter, softClip, ceiling].map(node => node.constructor.name),
+        mixerGain: mixer.gain.value,
+        makeupGain: makeup.gain.value,
+        oversample: [softClip.oversample, ceiling.oversample],
         voices: voiceInputs.length,
         voiceOutputs: voiceInputs.every(([voice]) => edges.filter(([from]) => from === voice).length === 1),
       };
 
-      // An extreme positive/negative overload also exercises the safety ceiling
-      // beyond what a finite-ratio compressor can contain on its own.
+      // An extreme positive/negative overload through the whole chain must stay
+      // bounded, and fed straight into the clip stages (bypassing the
+      // compressor and limiter) must land exactly on the safety ceiling.
       const overload = context.createConstantSource();
       overload.offset.setValueAtTime(1e6, 3);
       overload.offset.setValueAtTime(-1e6, 3.05);
       overload.connect(mixer);
+      overload.connect(softClip);
       overload.start(3);
       overload.stop(3.1);
 
@@ -71,9 +80,14 @@ for (const sampleRate of [44100, 48000]) {
       }
       return { graph, peak, minimum, chordPeak, finite };
     });
+    expect(result.graph.makeupGain).toBeCloseTo(1.6, 5);
+    delete result.graph.makeupGain;
     expect(result.graph).toEqual({
+      contextOptions: { sampleRate: 192000 },
       outputs: 1,
-      stages: ['GainNode', 'DynamicsCompressorNode', 'DynamicsCompressorNode', 'WaveShaperNode'],
+      stages: ['GainNode', 'DynamicsCompressorNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
+      mixerGain: 1,
+      oversample: ['4x', 'none'],
       voices: 56,
       voiceOutputs: true,
     });
