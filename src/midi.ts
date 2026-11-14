@@ -10,6 +10,7 @@ export function createMidi(
   onPorts: (ports: MidiPorts) => void = () => {},
 ) {
   let enabled = false;
+  let disposed = false;
   let access: MIDIAccess | undefined;
   let input: MIDIInput | undefined;
   let output: MIDIOutput | undefined;
@@ -69,7 +70,9 @@ export function createMidi(
   async function connect() {
     if (!navigator.requestMIDIAccess) { publish(); return; }
     try {
-      access = await navigator.requestMIDIAccess();
+      const result = await navigator.requestMIDIAccess();
+      if (disposed) return;
+      access = result;
       selectInput(Array.from(access.inputs.values()).find(port => port.state !== 'disconnected' && port.name === 'IAC Driver Qwerkey In')?.id ?? '');
       selectOutput(Array.from(access.outputs.values()).find(port => port.state !== 'disconnected' && port.name === 'IAC Driver Qwerkey Out')?.id ?? '');
       access.onstatechange = () => {
@@ -79,7 +82,7 @@ export function createMidi(
       };
     } catch {
       // Local keyboard interaction is available when MIDI permission is denied.
-      publish();
+      if (!disposed) publish();
     }
   }
 
@@ -100,5 +103,15 @@ export function createMidi(
     transmit(pitch, active);
   }
 
-  return { connect, sendNote, selectInput, selectOutput, setEnabled };
+  function dispose() {
+    if (disposed) return;
+    setEnabled(false);
+    disposed = true;
+    if (input) input.onmidimessage = null;
+    if (access) access.onstatechange = null;
+    input = undefined;
+    output = undefined;
+  }
+
+  return { connect, sendNote, selectInput, selectOutput, setEnabled, dispose };
 }

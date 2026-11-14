@@ -19,7 +19,7 @@ First commercial product to apply the principle was probably the [Opal Sonome ke
 - [ ] Recording and playback
 ## Development
 
-Use Node.js 22.12 or newer and npm. Install packages and the test browser:
+Use Node.js 22.23.4 or newer and npm. Install packages and the test browser:
 
 ```sh
 npm ci
@@ -28,12 +28,14 @@ npx playwright install chromium
 
 Run `npm run dev` to start the development server. Run `npm run build` to
 produce a static site in `dist/`, and `npm run preview` to serve that build.
-Deploy the contents of `dist/`. Asset URLs are relative to support hosting in
-a subdirectory.
+Deploy the contents of `dist/` at the root of [qwerkey.xyz](https://qwerkey.xyz).
+The default build and preview target `/`; no environment override is needed.
+For a subdirectory deployment, set `QWERKEY_BASE=/your-path/` for both commands.
+Rebuild whenever the deployment base changes.
 
 ## Audio, MIDI, and tests
 
-The app uses strict TypeScript, native DOM APIs, and the browser Web MIDI API.
+The app uses Astro with a React instrument island, strict TypeScript, and the browser Web MIDI API.
 Run `npm run typecheck` to check browser code, or `npm run build` to check and
 bundle it with Vite. The app starts in Audio mode with a splash screen. Click “Click here to enable
 audio” to start the synthesizer, then use the Audio/MIDI segments above the
@@ -73,7 +75,24 @@ and serve over HTTPS or localhost for MIDI access.
 
 Run `npm test` to build and run the small Playwright suite in Chromium. It tests
 rendering, audio startup and voice envelopes, chords, repeated keydown, mode
-switching, the Safari restriction, MIDI input, and missing ports or denied access. Fake MIDI ports at the browser API boundary exercise native MIDI integration without hardware. The production build is tested under `/qwerkey/`,
+switching, the Safari restriction, MIDI input, and missing ports or denied access. Fake MIDI ports at the browser API boundary exercise native MIDI integration without hardware. The production build is tested at `/`,
 including checks for failed requests, browser errors, and vendor asset URLs.
 A hardware check can be performed by connecting the named ports, playing a
 chord, releasing each key, and sending notes back through `Qwerkey In`.
+
+## Architecture
+
+Astro builds the static document in `src/pages/index.astro` with the shared
+`src/layouts/SiteLayout.astro` layout. `Instrument.tsx` hydrates on page load;
+its child components render the keyboards and controls. `useInstrument` owns
+browser listeners and a controller for each mounted instrument.
+`src/instrument/controller.ts` handles note ownership, mode changes, highlights,
+and session state. `audio.ts` and `midi.ts` remain independent browser services
+with explicit disposal, including protection against late permission responses.
+Audio still requires the enable button gesture and MIDI access is requested only
+on selection of MIDI mode.
+
+Type checking uses `astro check` and TypeScript 6, supported by the current Astro
+checker. The production build and Playwright tests use the same configured base.
+Migration tests bundle a separate React Strict Mode harness; no test route or
+controls are included in the deployed site.

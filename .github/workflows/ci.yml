@@ -31,7 +31,7 @@ jobs:
           cache: npm
       - run: npm ci
       # TypeScript has already been checked by the upstream job.
-      - run: npx vite build
+      - run: npx astro build
       - uses: actions/upload-artifact@v7
         with:
           name: dist
