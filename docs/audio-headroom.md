@@ -9,6 +9,11 @@ the dry signal has no added reverb delay. The compressor and
 latency hint were already configured; this change adds submix headroom and
 repeatable measurements.
 
+A second parallel send from master makeup adds symmetric tanh saturation with
+1.5 drive and 4× oversampling. Its return gain is 0.06, keeping the saturation
+subtle. The dry mix, saturation return, and hall return all meet before the
+limiter and sample ceiling.
+
 Voice gain remains `1 / 12` at MIDI velocity 64. Six coherent voices at velocity
 127 nearly reach full scale: the baseline measured peak was −0.07 dBFS. Submix
 gain is now `0.5` (−6.02 dB), leaving room before compression. Master makeup

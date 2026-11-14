@@ -68,6 +68,16 @@ function createHallImpulse(context: AudioContext): AudioBuffer {
   return impulse;
 }
 
+function saturationCurve(): Float32Array<ArrayBuffer> {
+  const curve = new Float32Array(4097);
+  for (let i = 0; i < curve.length; i++) {
+    const x = i * 2 / (curve.length - 1) - 1;
+    // Symmetric soft saturation adds gentle odd harmonics without a DC offset.
+    curve[i] = Math.tanh(1.5 * x) / Math.tanh(1.5);
+  }
+  return curve;
+}
+
 function createMixer(context: AudioContext): GainNode {
   const mixer = context.createGain();
   mixer.gain.value = submixGain;
@@ -107,6 +117,15 @@ function createMixer(context: AudioContext): GainNode {
   mixer.connect(compressor);
   compressor.connect(makeup);
   makeup.connect(limiter);
+  // A subtle parallel saturation send on the shared mix, alongside reverb.
+  const saturation = context.createWaveShaper();
+  saturation.curve = saturationCurve();
+  saturation.oversample = '4x';
+  const saturationReturn = context.createGain();
+  saturationReturn.gain.value = 0.06;
+  makeup.connect(saturation);
+  saturation.connect(saturationReturn);
+  saturationReturn.connect(limiter);
   // A quiet, dark hall return alongside the dry master. Both paths pass
   // through the output protection, and the dry attack stays immediate.
   const reverbHighpass = context.createBiquadFilter();
