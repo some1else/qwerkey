@@ -1,13 +1,15 @@
 import type { SynthParameters } from '../audio';
 
 export const fields = [
-  { id: 'voices', label: 'Poly (voices)', title: 'Maximum simultaneous voices', min: 1, max: 64, step: 1 },
-  { id: 'frequency', label: 'Freq (Hz)', title: 'Lowpass cutoff: 440 follows the played note; 880 is one octave above', min: 1, max: 20000, step: 1 },
-  { id: 'resonance', label: 'Reso (Q)', title: 'Lowpass resonance in classic Q', min: 0.1, max: 30, step: 0.1 },
-  { id: 'attack', label: 'Attack (ms)', title: 'Attack duration', min: 0, max: 10000, step: 1 },
-  { id: 'decay', label: 'Decay (ms)', title: 'Decay duration', min: 0, max: 10000, step: 1 },
-  { id: 'sustain', label: 'Sustain (dB)', title: 'Sustain level in decibels relative to the attack peak', min: -96, max: 0, step: 0.1 },
-  { id: 'release', label: 'Release (ms)', title: 'Release duration', min: 0, max: 10000, step: 1 },
+  { id: 'frequency', label: 'Frequency', unit: 'Hz', title: 'Lowpass cutoff: 440 follows the played note; 880 is one octave above', min: 1, max: 20000, step: 1 },
+  { id: 'resonance', label: 'Resonance', unit: '', title: 'Lowpass resonance in classic Q', min: 0.1, max: 30, step: 0.01 },
+  { id: 'warmth', label: 'Warmth', unit: '%', title: 'Saturation and high note attenuation in percent', min: 0, max: 100, step: 1 },
+  { id: 'space', label: 'Space', unit: '%', title: 'Reverb, unison and stereo spread in percent', min: 0, max: 100, step: 1 },
+  { id: 'voices', label: 'Voices', unit: '', title: 'Maximum simultaneous voices', min: 1, max: 32, step: 1 },
+  { id: 'attack', label: 'Attack', unit: 'ms', title: 'Attack duration', min: 0, max: 1000, step: 1 },
+  { id: 'decay', label: 'Decay', unit: 'ms', title: 'Decay duration', min: 0, max: 3000, step: 1 },
+  { id: 'sustain', label: 'Sustain', unit: 'dB', title: 'Sustain level in decibels relative to the attack peak', min: -96, max: 0, step: 0.1 },
+  { id: 'release', label: 'Release', unit: 'ms', title: 'Release duration', min: 0, max: 10000, step: 1 },
 ] as const;
 
 

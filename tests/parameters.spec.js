@@ -28,6 +28,11 @@ async function openSynth(page) {
     };
     // Offline contexts do not apply automation until rendering starts.
     window.parameterValues = new WeakMap();
+    const setTarget = AudioParam.prototype.setTargetAtTime;
+    AudioParam.prototype.setTargetAtTime = function (value, ...args) {
+      window.parameterValues.set(this, value);
+      return setTarget.call(this, value, ...args);
+    };
     const setValue = AudioParam.prototype.setValueAtTime;
     AudioParam.prototype.setValueAtTime = function (value, time) {
       window.parameterValues.set(this, value);
@@ -40,7 +45,16 @@ async function openSynth(page) {
     };
     const connect = AudioNode.prototype.connect;
     AudioNode.prototype.connect = function (destination, ...args) {
-      if (this instanceof BiquadFilterNode) {
+      if (this instanceof GainNode && destination instanceof WaveShaperNode) window.saturationDrive = this.gain;
+      if (destination instanceof StereoPannerNode && this instanceof GainNode) {
+        window.voiceTone = this.gain;
+        window.voicePan = destination.pan;
+      }
+      if (destination instanceof GainNode) {
+        if (this instanceof ConvolverNode) window.reverbReturn = destination.gain;
+        if (this instanceof WaveShaperNode) window.saturationReturn = destination.gain;
+      }
+      if (this instanceof BiquadFilterNode && destination instanceof GainNode) {
         window.filters.push(this);
         window.voiceGain = destination.gain;
       }
@@ -98,16 +112,19 @@ test('tracks each chord note and tunes oscillator and classic Q while held', asy
 
 test('uses the requested defaults and holds sustain at relative dB until release', async ({ page }) => {
   await openSynth(page);
-  await expect(page.locator('#oscillator input')).toHaveAttribute('aria-valuetext', 'triangle');
-  for (const [id, value] of [['voices', '8'], ['attack', '9'], ['decay', '1800'], ['sustain', '-12'], ['release', '2200'], ['frequency', '440'], ['resonance', '0.7']]) {
+  await expect(page.locator('#oscillator input')).toHaveAttribute('aria-valuetext', 'Triangle');
+  for (const [id, value] of [['voices', '8'], ['attack', '9'], ['decay', '900'], ['sustain', '-12'], ['release', '2200'], ['frequency', '440'], ['resonance', '0.7']]) {
     await expect(page.locator(`#${id} input`)).toHaveValue(value);
   }
-  await expect(page.getByText('Sustain (dB)', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sustain', { exact: true })).toBeVisible();
+  for (const [id, max] of [['attack', '1000'], ['decay', '3000'], ['voices', '32']]) {
+    await expect(page.locator(`#${id} input`)).toHaveAttribute('max', max);
+  }
   await page.locator('#instrument').focus();
   await page.keyboard.down('y');
   const ramps = await page.evaluate(() => window.ramps);
   expect(ramps).toHaveLength(3);
-  for (const [index, time] of [0, .009, 1.809].entries()) {
+  for (const [index, time] of [0, .009, .909].entries()) {
     expect(ramps[index].time).toBeCloseTo(time, 3);
   }
   expect(ramps[1].value).toBeCloseTo(1 / 12, 6);
@@ -124,6 +141,50 @@ test('uses the requested defaults and holds sustain at relative dB until release
   expect(result.release.time).toBeCloseTo(122.2);
   expect(result.release.value).toBe(.0001);
   expect(result.gain).toBeCloseTo((1 / 12) * 10 ** (-12 / 20), 6);
+});
+
+test('warmth and space scale the effect returns and held unison, and reset to the current sound', async ({ page }) => {
+  await openSynth(page);
+  for (const id of ['warmth', 'space']) await expect(page.locator(`#${id} input`)).toHaveValue('25');
+  const returns = () => page.evaluate(() => [window.saturationReturn, window.reverbReturn]
+    .map(param => window.parameterValues.get(param) ?? param.value));
+  expect(await returns()).toEqual([expect.closeTo(0.06, 5), expect.closeTo(0.1, 5)]);
+  const drive = () => page.evaluate(() => window.parameterValues.get(window.saturationDrive) ?? window.saturationDrive.value);
+  expect(await drive()).toBeCloseTo(1, 5);
+  await pressPiano(page, 69);
+  await setKnob(page, 'warmth', '0');
+  await setKnob(page, 'space', '0');
+  expect(await returns()).toEqual([0, 0]);
+  expect(await page.evaluate(() => window.detuneRamps.slice(-2).map(ramp => ramp.value))).toEqual([0, 0]);
+  await setKnob(page, 'warmth', '100');
+  await setKnob(page, 'space', '100');
+  expect(await returns()).toEqual([expect.closeTo(1, 5), expect.closeTo(6, 5)]);
+  expect(await drive()).toBeCloseTo(10 ** (30 / 20), 4);
+  const spread = await page.evaluate(() => window.detuneRamps.slice(-2).map(ramp => ramp.value));
+  expect(spread[0]).toBeCloseTo(-25, 5);
+  expect(spread[1]).toBeCloseTo(25, 5);
+  await page.locator('.piano_keys .key_69').dispatchEvent('pointerup', { pointerId: 69 });
+  const releaseSpread = await page.evaluate(() => window.detuneRamps.slice(-2).map(ramp => ramp.value));
+  expect(releaseSpread[0]).toBeCloseTo(-25, 5);
+  expect(releaseSpread[1]).toBeCloseTo(25, 5);
+  for (const id of ['warmth', 'space']) await page.locator(`#${id} .knob_control`).dblclick();
+  expect(await returns()).toEqual([expect.closeTo(0.06, 5), expect.closeTo(0.1, 5)]);
+});
+
+test('warmth scales high-note attenuation and space scales held-note pan', async ({ page }) => {
+  await openSynth(page);
+  await pressPiano(page, 93);
+  const voice = () => page.evaluate(() => [window.voiceTone, window.voicePan]
+    .map(param => window.parameterValues.get(param) ?? param.value));
+  expect(await voice()).toEqual([expect.closeTo(10 ** (-6 / 20), 5), expect.closeTo(24.5 / 27.5, 5)]);
+  await setKnob(page, 'warmth', '0');
+  await setKnob(page, 'space', '0');
+  expect(await voice()).toEqual([1, 0]);
+  await setKnob(page, 'warmth', '100');
+  await setKnob(page, 'space', '100');
+  expect(await voice()).toEqual([expect.closeTo(10 ** (-24 / 20), 5), expect.closeTo(24.5 / 27.5, 5)]);
+  for (const id of ['warmth', 'space']) await page.locator(`#${id} .knob_control`).dblclick();
+  expect(await voice()).toEqual([expect.closeTo(10 ** (-6 / 20), 5), expect.closeTo(24.5 / 27.5, 5)]);
 });
 
 test('converts edited sustain dB to amplitude and releases during attack', async ({ page }) => {
@@ -203,9 +264,13 @@ test('knob keyboard, drag and reset update held-note tuning', async ({ page }) =
   await page.keyboard.down('y');
   await page.keyboard.up('y');
   const slider = page.getByRole('slider', { name: 'Lowpass resonance in classic Q control', exact: true });
-  await setKnob(page, 'resonance', '2');
-  await expect(slider).toHaveValue('2');
+  await expect(slider).toHaveAttribute('step', '0.01');
+  await setKnob(page, 'resonance', '2.37');
+  await expect(slider).toHaveValue('2.37');
   await slider.focus();
+  await page.keyboard.press('ArrowRight');
+  // Logarithmic keyboard movement still snaps to the hundredth-Q grid.
+  await expect(slider).toHaveValue('2.51');
   await page.keyboard.press('End');
   await expect(page.locator('#resonance input')).toHaveValue('30');
   await page.keyboard.press('Home');
@@ -237,10 +302,16 @@ test('sustain knob supports decimal values and updates the native envelope', asy
   await page.keyboard.up('y');
 });
 
-test('uses eight knobs with labels below and ADSR on the bottom row', async ({ page }) => {
+test('uses ten knobs with labels below and ADSR on the bottom row', async ({ page }) => {
   await openSynth(page);
   const controls = page.getByRole('group', { name: 'Audio parameters' });
-  await expect(controls.getByRole('slider')).toHaveCount(8);
+  await expect(controls.getByRole('slider')).toHaveCount(10);
+  await expect(controls.locator('.parameter_label')).toHaveText([
+    'Oscillator', 'Frequency', 'Resonance', 'Warmth', 'Space', 'Voices', 'Attack', 'Decay', 'Sustain', 'Release',
+  ]);
+  await expect(controls.locator('.parameter_value')).toHaveText([
+    'Triangle', '440 Hz', '0.7', '25%', '25%', '8', '9 ms', '900 ms', '-12 dB', '2200 ms',
+  ]);
   await expect(controls.locator('input[type="number"], select, .parameter_fader')).toHaveCount(0);
   const layout = await controls.locator('.audio_parameter').evaluateAll(items => items.map(item => ({
     id: item.id,
@@ -248,25 +319,36 @@ test('uses eight knobs with labels below and ADSR on the bottom row', async ({ p
     knobBottom: item.querySelector('.knob_control').getBoundingClientRect().bottom,
     labelTop: item.querySelector('.parameter_label').getBoundingClientRect().top,
   })));
-  expect(layout.map(item => item.id)).toEqual(['oscillator', 'voices', 'frequency', 'resonance', 'attack', 'decay', 'sustain', 'release']);
-  expect(new Set(layout.slice(0, 4).map(item => item.y)).size).toBe(1);
-  expect(new Set(layout.slice(4).map(item => item.y)).size).toBe(1);
-  expect(layout[4].y).toBeGreaterThan(layout[0].y);
+  expect(layout.map(item => item.id)).toEqual(['oscillator', 'frequency', 'resonance', 'warmth', 'space', 'voices', 'attack', 'decay', 'sustain', 'release']);
+  expect(new Set(layout.slice(0, 5).map(item => item.y)).size).toBe(1);
+  expect(new Set(layout.slice(5).map(item => item.y)).size).toBe(1);
+  expect(layout[5].y).toBeGreaterThan(layout[0].y);
   for (const item of layout) expect(item.labelTop).toBeGreaterThanOrEqual(item.knobBottom);
   const oscillator = page.getByRole('slider', { name: 'Oscillator', exact: true });
   await oscillator.focus();
   await page.keyboard.press('Home');
-  await expect(oscillator).toHaveAttribute('aria-valuetext', 'sine');
+  await expect(oscillator).toHaveAttribute('aria-valuetext', 'Sine');
+  await expect(page.locator('#oscillator .parameter_value')).toHaveText('Sine');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#oscillator .parameter_value')).toHaveText('Triangle');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#oscillator .parameter_value')).toHaveText('Saw');
   await page.keyboard.press('End');
-  await expect(oscillator).toHaveAttribute('aria-valuetext', 'square');
+  await expect(oscillator).toHaveAttribute('aria-valuetext', 'Square');
+  await expect(page.locator('#oscillator .parameter_value')).toHaveText('Square');
   await page.locator('#oscillator .knob_control').dblclick();
-  await expect(oscillator).toHaveAttribute('aria-valuetext', 'triangle');
+  await expect(oscillator).toHaveAttribute('aria-valuetext', 'Triangle');
+  await setKnob(page, 'voices', '1');
+  await expect(page.locator('#voices .parameter_value')).toHaveText('Mono');
+  await expect(page.locator('#voices input')).toHaveAttribute('aria-valuetext', 'Mono');
+  await setKnob(page, 'voices', '2');
+  await expect(page.locator('#voices .parameter_value')).toHaveText('2');
 });
 
 for (const [release, noteOff] of [[0, .005], [50, .9], [2200, 3]]) {
   test(`detunes over decay and continues smoothly into ${release} ms release at ${noteOff}s`, async ({ page }) => {
     await openSynth(page);
-    await expect(page.locator('#decay .parameter_label')).toHaveText('Decay (ms)');
+    await expect(page.locator('#decay .parameter_label')).toHaveText('Decay');
     await setKnob(page, 'release', String(release));
     await page.locator('#instrument').focus();
     await page.keyboard.down('y');
@@ -278,7 +360,7 @@ for (const [release, noteOff] of [[0, .005], [50, .9], [2200, 3]]) {
     expect(held.ramps).toHaveLength(2);
     expect(held.ramps[0].value).toBeCloseTo(-5, 6);
     expect(held.ramps[1].value).toBeCloseTo(5, 6);
-    for (const ramp of held.ramps) expect(ramp.time).toBeCloseTo(1.80902, 6);
+    for (const ramp of held.ramps) expect(ramp.time).toBeCloseTo(.90902, 6);
     await page.evaluate(time => {
       Object.defineProperty(window.oscillators[0].context, 'currentTime', { get: () => time });
     }, noteOff);
@@ -294,9 +376,9 @@ for (const [release, noteOff] of [[0, .005], [50, .9], [2200, 3]]) {
     const sustain = peak * 10 ** (-12 / 20);
     const level = noteOff <= .00901
       ? .0001 * (peak / .0001) ** (noteOff / .00901)
-      : peak * (sustain / peak) ** Math.min(1, (noteOff - .00901) / (1.80902 - .00901));
+      : peak * (sustain / peak) ** Math.min(1, (noteOff - .00901) / (.90902 - .00901));
     expect(result.gain).toBeCloseTo(level, 6);
-    const spread = 5 * Math.max(0, Math.min(1, (noteOff - .00901) / (1.80902 - .00901)));
+    const spread = 5 * Math.max(0, Math.min(1, (noteOff - .00901) / (.90902 - .00901)));
     expect(result.starts[0]).toBeCloseTo(-spread, 6);
     expect(result.starts[1]).toBeCloseTo(spread, 6);
     expect(result.ramps).toHaveLength(2);

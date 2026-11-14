@@ -249,6 +249,86 @@ test("editor selection, move, delete, range and tab navigation do not trigger li
   await expect(
     page.getByRole("tab", { name: "Keyboard", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#buffer-mode')).toBeFocused();
+  await expect(page.locator('#buffer-mode')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.locator('#buffer-mode')).toBeFocused();
+  await expect(page.locator('.recorded_buffer')).toHaveAttribute('data-note-count', '0');
+  expect(await page.pageErrors()).toEqual([]);
+});
+
+test("note edges lengthen and shorten individual notes while the body still moves", async ({ page }) => {
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  for (const key of ["y", "x"]) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(200);
+    await page.keyboard.up(key);
+    await page.waitForTimeout(80);
+  }
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  const notes = page.locator(".roll_note");
+  await expect(notes).toHaveCount(2);
+  await expect.poll(async () => (await notes.nth(1).boundingBox())?.width ?? 0).toBeGreaterThan(100);
+  const note = notes.nth(1);
+  const original = await note.boundingBox();
+  const untouched = await notes.first().boundingBox();
+  const dragEdge = async (edge, delta) => {
+    const handle = note.locator(`.roll_note_handle[data-edge="${edge}"]`);
+    const box = await handle.boundingBox();
+    expect(box.height).toBeGreaterThan(10);
+    expect(box.width).toBeGreaterThan(0);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + delta, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+  };
+  const expectBounds = async (x, width) => {
+    await expect.poll(async () => {
+      const box = await note.boundingBox();
+      return Math.max(Math.abs(box.x - x), Math.abs(box.width - width));
+    }).toBeLessThan(2);
+  };
+  await dragEdge("end", 40);
+  await expectBounds(original.x, original.width + 40);
+  await dragEdge("end", -60);
+  await expectBounds(original.x, original.width - 20);
+  await dragEdge("start", -30);
+  await expectBounds(original.x - 30, original.width + 10);
+  await dragEdge("start", 50);
+  await expectBounds(original.x + 20, original.width - 40);
+  const other = await notes.first().boundingBox();
+  expect(other.x).toBeCloseTo(untouched.x, 1);
+  expect(other.width).toBeCloseTo(untouched.width, 1);
+
+  // The center retains a move target, including after resizing.
+  const resized = await note.boundingBox();
+  await page.mouse.move(resized.x + resized.width / 2, resized.y + resized.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(resized.x + resized.width / 2 + 20, resized.y + resized.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expectBounds(resized.x + 20, resized.width);
+
+  // Keyboard resizing uses the same edits and respects the 1 ms minimum.
+  await note.focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  const longer = await note.boundingBox();
+  expect(longer.width).toBeGreaterThan(resized.width);
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expectBounds(resized.x + 20, resized.width);
+  await dragEdge("end", -original.width * 2);
+  expect(await note.evaluate(el => Number(el.style.getPropertyValue('--timeline-length')))).toBeCloseTo(0.001, 6);
+  const shortest = await note.boundingBox();
+  expect(shortest.width).toBeGreaterThan(0);
+  expect(shortest.width).toBeLessThan(9);
+  // Short notes retain distinct edges and a body target.
+  const start = await note.locator('[data-edge="start"]').boundingBox();
+  const end = await note.locator('[data-edge="end"]').boundingBox();
+  expect(start.x + start.width).toBeLessThanOrEqual(end.x);
   expect(await page.pageErrors()).toEqual([]);
 });
 
@@ -304,8 +384,16 @@ test("ruler draws, moves and resizes the loop without editing notes", async ({ p
   const start = edge(page, "start");
   const end = edge(page, "end");
   const ruler = page.locator(".roll_ruler");
-  const box = await ruler.boundingBox();
   const ticks = page.locator(".roll_tick");
+  // Entry fits the short recorded phrase; zoom out to draw a multi-second loop.
+  await ruler.hover();
+  for (let i = 0; i < 15; i++) {
+    const spacing = (await ticks.nth(1).boundingBox()).x - (await ticks.nth(0).boundingBox()).x;
+    if (spacing * 5 < (await page.locator(".roll_viewport").boundingBox()).width) break;
+    await page.mouse.wheel(0, -500);
+    await page.waitForTimeout(60);
+  }
+  const box = await ruler.boundingBox();
   const unit = (await ticks.nth(1).boundingBox()).x - (await ticks.nth(0).boundingBox()).x;
   const drag = async (from, to, y = box.y + 25) => {
     await page.mouse.move(from, y);
@@ -469,13 +557,15 @@ test("grid selection transposes the whole group once and preserves metadata", as
   await page.keyboard.up("y");
   await page.keyboard.up("u");
   await page.getByRole("tab", { name: "Buffer", exact: true }).click();
-  const before = await page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(item.style.top)));
+  await expect(page.locator('.roll_note')).toHaveCount(2);
+  const positions = () => page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(getComputedStyle(item).top)));
+  const before = await positions();
+  expect(before.every(Number.isFinite)).toBe(true);
   await page.locator('.roll_grid').focus();
   await page.keyboard.press('ControlOrMeta+a');
   await expect(page.locator('.roll_note[data-selected]')).toHaveCount(2);
   await page.keyboard.press('Shift+ArrowUp');
-  const after = await page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(item.style.top)));
-  expect(after).toEqual(before.map(y => y - 12 * 18));
+  await expect.poll(positions).toEqual(before.map(y => y - 12 * 18));
   await page.keyboard.press('Backspace');
   await expect(page.locator('.roll_note')).toHaveCount(0);
 
@@ -561,7 +651,7 @@ test("incoming MIDI is recorded at the looping playhead even on a hidden editor"
   await expect.poll(() => page.evaluate(() => window.sent.filter(data => data[0] === 0x93 && data[1] === 74 && data[2] === 101).length)).toBeGreaterThanOrEqual(2);
   await expect.poll(() => page.evaluate(() => window.sent.some(data => data[0] === 0x83 && data[1] === 74))).toBe(true);
   await page.locator("#buffer-mode").click();
-  await expect(page.locator(".roll_note")).toHaveCount(2);
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-note-count", "2");
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.locator(".roll_viewport").focus();
   await page.keyboard.press("Space");
@@ -616,6 +706,9 @@ test("completed snapshots are stable and held snapshots remain immutable", () =>
 });
 
 test("hidden recording avoids editor DOM and Space plays fresh capture", async ({ page }) => {
+  // Slow React commits used to let auto-fit scroll before zoom anchoring ran.
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setCPUThrottlingRate', { rate: 6 });
   await page.goto("./");
   await page.locator("#enabler").click();
   await page.keyboard.press("y");
@@ -626,5 +719,123 @@ test("hidden recording avoids editor DOM and Space plays fresh capture", async (
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.keyboard.press("Space");
   await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await expect.poll(() => page.locator('.roll_viewport').evaluate(element => {
+    const start = Number(element.querySelector('.roll_loop_start input').value);
+    const end = Number(element.querySelector('.roll_loop_end input').value);
+    const zoom = parseFloat(getComputedStyle(element.querySelector('.roll_grid')).getPropertyValue('--timeline-unit'));
+    return Math.abs((end - start) * zoom - (element.clientWidth - 32));
+  })).toBeLessThan(1);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(page.locator(".roll_note")).toHaveCount(1);
+  expect(await page.locator('.roll_viewport').evaluate(element => element.scrollLeft)).toBe(0);
+});
+
+test("stopped phrases capture first onset through Play, retaining silence and held notes", () => {
+  let time = 1000;
+  const store = recording(() => time);
+  expect(store.finishLoopCapture()).toBeNull();
+  store.start("first", 60);
+  time = 1200;
+  store.end("first");
+  time = 1600;
+  store.start("second", 64);
+  time = 1800;
+  store.end("second");
+  time = 3000;
+  expect(store.finishLoopCapture()).toEqual([0, 2]);
+  expect(store.extent()).toBe(2);
+  expect(store.snapshot().map(n => n.duration)).toEqual([0.2, 0.2]);
+  expect(parse(midiFile(store.snapshot(), store.extent())).end).toBe(2000);
+  store.setCapturePosition(() => 0.5);
+  store.start("overdub", 67);
+  expect(store.capturedLoop()).toBeNull();
+  time = 3100;
+  store.end("overdub");
+  store.setCapturePosition(null);
+  time = 4100;
+  // Merely restarting playback does not replace the previous region.
+  expect(store.finishLoopCapture()).toBeNull();
+  store.start("next", 72, 3, 99, "midi");
+  expect(store.capturedLoop()).toEqual([3, 3.001]);
+  time = 5100;
+  expect(store.finishLoopCapture()).toEqual([3, 4]);
+  // Starting playback while held must not end the live note.
+  store.setCapturePosition(() => 3);
+  time = 5600;
+  store.end("next", 23);
+  expect(store.snapshot().at(-1)).toEqual(expect.objectContaining({
+    start: 3, duration: 1.5, channel: 3, velocity: 99, releaseVelocity: 23,
+  }));
+});
+
+test("manual loop edits override a phrase and Clear rearms first-note capture", () => {
+  let time = 0;
+  const store = recording(() => time);
+  store.start("first", 60);
+  store.cancelLoopCapture();
+  time = 100;
+  store.start("second", 64);
+  expect(store.finishLoopCapture()).toBeNull();
+  store.clear();
+  time = 500;
+  expect(store.finishLoopCapture()).toEqual([0, 0.4]);
+  store.finish();
+  store.clear();
+  expect(store.capturedLoop()).toBeNull();
+  time = 1000;
+  store.start("fresh", 67);
+  time = 2000;
+  expect(store.finishLoopCapture()).toEqual([0, 1]);
+});
+
+test("Space closes stopped phrases at the gesture, including silence, and rearms after Stop", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.gestures = [];
+    document.addEventListener("keydown", event => {
+      if (["KeyY", "KeyU", "Space"].includes(event.code))
+        window.gestures.push({ code: event.code, time: performance.now() });
+    }, true);
+  });
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.down("y");
+  await page.waitForTimeout(100);
+  await page.keyboard.up("y");
+  await page.waitForTimeout(400);
+  await page.keyboard.press("Space");
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  await page.keyboard.press("Space");
+  await page.locator("#buffer-mode").click();
+  const firstEnd = Number(await edge(page, "end").inputValue());
+  const firstTiming = await page.evaluate(() => (window.gestures[1].time - window.gestures[0].time) / 1000);
+  expect(Number(await edge(page, "start").inputValue())).toBe(0);
+  expect(firstEnd).toBeCloseTo(firstTiming, 1);
+  expect(firstEnd).toBeGreaterThan(0.5);
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("Space");
+  expect(Number(await edge(page, "end").inputValue())).toBe(firstEnd);
+  await page.locator("#keyboard-mode").click();
+  await page.locator("#instrument").focus();
+  await page.waitForTimeout(150);
+  await page.keyboard.down("u");
+  await page.waitForTimeout(100);
+  await page.keyboard.up("u");
+  // The loop start is visible before Play, and its end keeps following silence.
+  await page.locator("#buffer-mode").click();
+  await expect.poll(async () => Number(await edge(page, "start").inputValue())).toBeGreaterThan(firstEnd);
+  const secondStart = Number(await edge(page, "start").inputValue());
+  await page.waitForTimeout(300);
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  const secondEnd = Number(await edge(page, "end").inputValue());
+  const secondTiming = await page.evaluate(() => {
+    const onset = window.gestures.find(event => event.code === "KeyU");
+    return (window.gestures.at(-1).time - onset.time) / 1000;
+  });
+  expect(secondEnd - secondStart).toBeCloseTo(secondTiming, 1);
+  await page.waitForTimeout(100);
+  expect(Number(await edge(page, "end").inputValue())).toBe(secondEnd);
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-note-count", "2");
 });

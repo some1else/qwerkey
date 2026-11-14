@@ -120,13 +120,19 @@ transport share the current recording data, so overdubs play on subsequent passe
 without restarting playback. Held notes retain their
 full elapsed duration across loop wraps or Stop. Outside playback, capture resumes
 at the buffer end with subsequent elapsed silence preserved.
-The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer retains the
+While playback is stopped, the first live note sets a new loop start in the
+buffer. Press Space (or Play) to set the loop end at that moment and start
+playback, including silence after the last note. Stop, then play a new phrase to
+capture another loop; starting playback without new notes reuses the existing
+region. Manually drawing, adjusting, or clearing the region takes over from this
+automatic capture for the current phrase.
+The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer fits the current loop region to the viewport and retains the
 output selected through Audio or Midi. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.
 
 The buffer uses an audio/ui piano roll with a seconds timeline and no musical
 meter or snapping. Scroll horizontally to inspect the recording. Scroll up on the
-ruler to zoom out or down to zoom in around the pointer. Select and drag notes to move them, drag their edges to resize, double-click
+ruler to zoom out or down to zoom in around the pointer. Select and drag notes to move them. Drag a note's right edge to lengthen or shorten it, or its left edge to change its start while keeping its end fixed. Shift+Left/Right on a focused note adjusts its length in 10 ms steps, with a 1 ms minimum. Double-click
 empty space to draw, and use the velocity lane to change dynamics. Delete
 selected notes with Backspace (or Delete) while focused in the note editor. Incoming held notes grow until release and
 cannot be edited until then. Up/Down transposes selected notes by a semitone;

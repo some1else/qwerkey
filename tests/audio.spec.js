@@ -42,14 +42,15 @@ for (const sampleRate of [44100, 48000]) {
       const ceiling = outputs[0][0];
       const softClip = edges.find(([, to]) => to === ceiling)[0];
       const limiter = edges.find(([, to]) => to === softClip)[0];
-      const makeup = edges.find(([, to]) => to === limiter)[0];
+      const compensation = edges.find(([, to]) => to === limiter)[0];
+      const makeup = edges.find(([, to]) => to === compensation)[0];
       const compressor = edges.find(([, to]) => to === makeup)[0];
       const mixer = edges.find(([, to]) => to === compressor)[0];
       const voiceInputs = edges.filter(([, to]) => to === mixer);
       const graph = {
         contextOptions: window.contextOptions,
         outputs: outputs.length,
-        stages: [mixer, compressor, makeup, limiter, softClip, ceiling].map(node => node.constructor.name),
+        stages: [mixer, compressor, makeup, compensation, limiter, softClip, ceiling].map(node => node.constructor.name),
         mixerGain: mixer.gain.value,
         makeupGain: makeup.gain.value,
         oversample: [softClip.oversample, ceiling.oversample],
@@ -89,8 +90,8 @@ for (const sampleRate of [44100, 48000]) {
     expect(result.graph).toEqual({
       contextOptions: { latencyHint: 'interactive' },
       outputs: 1,
-      stages: ['GainNode', 'DynamicsCompressorNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
-      mixerGain: 1,
+      stages: ['GainNode', 'DynamicsCompressorNode', 'GainNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
+      mixerGain: 0.5,
       oversample: ['4x', 'none'],
       voices: 56,
       voiceOutputs: true,
@@ -104,7 +105,7 @@ for (const sampleRate of [44100, 48000]) {
   });
 }
 
-for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
+for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right'], [41, 'centered']]) {
   test(`pans root note ${pitch} to the ${side} in rendered audio`, async ({ page }) => {
     await page.addInitScript(() => {
       window.AudioContext = function () {
@@ -112,11 +113,22 @@ for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
         Object.defineProperty(context, 'state', { get: () => 'running' });
         context.resume = async () => {};
         window.renderContext = context;
+        const createConvolver = context.createConvolver.bind(context);
+        context.createConvolver = () => {
+          window.hall = createConvolver();
+          return window.hall;
+        };
         return context;
       };
     });
     await page.goto('./');
     await page.locator('#enabler').click();
+    if (side === 'centered') {
+      await page.locator('#space input').evaluate(input => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '0');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
     await page.locator('.piano_keys').evaluate(element => { element.setPointerCapture = () => {}; });
     const key = page.locator(`.piano_keys .key_${pitch}`);
     const box = await key.boundingBox();
@@ -125,6 +137,8 @@ for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
       clientX: box.x + box.width / 2, clientY: box.y + box.height * .85,
     });
     const energies = await page.evaluate(async () => {
+      // Measure the direct voice pan independently of stereo room diffusion.
+      window.hall.disconnect();
       const buffer = await window.renderContext.startRendering();
       return [0, 1].map(channel => buffer.getChannelData(channel).reduce((sum, sample) => sum + sample * sample, 0));
     });
@@ -136,7 +150,8 @@ for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
       expect(energies[0]).toBeLessThan(energies[1] * 1e-6);
     } else {
       expect(energies[0]).toBeGreaterThan(1);
-      expect(energies[1] / energies[0]).toBeCloseTo(Math.tan(((pitch - 68.5) / 27.5 + 1) * Math.PI / 4) ** 2, 2);
+      expect(energies[1] / energies[0]).toBeCloseTo(side === 'centered' ? 1
+        : Math.tan(((pitch - 68.5) / 27.5 + 1) * Math.PI / 4) ** 2, 2);
     }
     expect(await page.pageErrors()).toEqual([]);
   });

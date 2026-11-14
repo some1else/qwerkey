@@ -17,7 +17,8 @@ for (const width of [1000, 668]) {
     const controls = await page.locator('.audio_parameter').evaluateAll(items => items.map(item => {
       const { x, y } = item.getBoundingClientRect(); return { x, y };
     }));
-    expect(new Set(controls.map(item => item.x)).size).toBe(4);
+    expect(controls).toHaveLength(10);
+    expect(new Set(controls.map(item => item.x)).size).toBe(5);
     expect(new Set(controls.map(item => item.y)).size).toBe(2);
     await setKnob(page, 'attack', 123);
     await page.screenshot({ path: `/tmp/qwerkey-just-play-${width}.png` });
@@ -60,7 +61,7 @@ test('Buffer actions and shared output controls preserve settings and playback h
   await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
-  expect((await download).suggestedFilename()).toBe('qwerkey-buffer.mid');
+  expect((await download).suggestedFilename()).toBe('qwerkey-range.mid');
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await page.locator('#keyboard-mode').click();
   await expect(page.locator('.computer_keys [data-pitch="69"]')).toHaveClass(/key_active/);
