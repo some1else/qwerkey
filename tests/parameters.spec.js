@@ -19,6 +19,7 @@ async function openSynth(page) {
     window.oscillators = [];
     window.filters = [];
     window.ramps = [];
+    window.detuneRamps = [];
     window.stops = [];
     const stop = OscillatorNode.prototype.stop;
     OscillatorNode.prototype.stop = function (time) {
@@ -45,9 +46,11 @@ async function openSynth(page) {
       }
       return connect.call(this, destination, ...args);
     };
-    const ramp = AudioParam.prototype.linearRampToValueAtTime;
-    AudioParam.prototype.linearRampToValueAtTime = function (value, time) {
-      window.ramps.push({ value, time });
+    const ramp = AudioParam.prototype.exponentialRampToValueAtTime;
+    AudioParam.prototype.exponentialRampToValueAtTime = function (value, time) {
+      const index = window.oscillators.findIndex(node => node.frequency === this);
+      if (index >= 0) window.detuneRamps.push({ index, value: 1200 * Math.log2(value / 440), time });
+      else window.ramps.push({ value, time });
       return ramp.call(this, value, time);
     };
   });
@@ -78,7 +81,7 @@ test('tracks each chord note and tunes oscillator and classic Q while held', asy
     filters: window.filters.map(node => [node.type, window.parameterValues.get(node.frequency), window.parameterValues.get(node.Q)]),
   }));
   let actual = await graph();
-  expect(actual.oscillators).toEqual([['triangle', 440], ['triangle', 880]]);
+  expect(actual.oscillators).toEqual([['triangle', 440], ['triangle', 440], ['triangle', 880], ['triangle', 880]]);
   expect(actual.filters.map(node => node.slice(0, 2))).toEqual([['lowpass', 440], ['lowpass', 880]]);
   for (const filter of actual.filters) expect(filter[2]).toBeCloseTo(20 * Math.log10(0.7), 5);
   await setKnob(page, 'frequency', '880');
@@ -86,7 +89,7 @@ test('tracks each chord note and tunes oscillator and classic Q while held', asy
   for (const oscillator of ['triangle', 'sawtooth', 'square']) {
     await setKnob(page, 'oscillator', ['sine', 'triangle', 'sawtooth', 'square'].indexOf(oscillator));
     actual = await graph();
-    expect(actual.oscillators.map(node => node[0])).toEqual([oscillator, oscillator]);
+    expect(actual.oscillators.map(node => node[0])).toEqual([oscillator, oscillator, oscillator, oscillator]);
   }
   expect(actual.filters.map(node => node[1])).toEqual([880, 1760]);
   for (const filter of actual.filters) expect(filter[2]).toBeCloseTo(20 * Math.log10(2), 5);
@@ -176,21 +179,21 @@ test('limits polyphony, prefers release tails, and applies lower limits immediat
   for (let pitch = 60; pitch < 68; pitch++) await press(pitch);
   expect(await page.evaluate(() => window.stops)).toEqual([]);
   await press(68);
-  expect(await page.evaluate(() => window.stops)).toEqual([{ index: 0, time: .005 }]);
+  expect(await page.evaluate(() => window.stops)).toEqual([{ index: 0, time: .005 }, { index: 1, time: .005 }]);
   // Key-up for a stolen note cannot release a different voice.
   await release(60);
-  expect(await page.evaluate(() => window.stops.length)).toBe(1);
+  expect(await page.evaluate(() => window.stops.length)).toBe(2);
   await release(65);
   await press(69);
-  expect(await page.evaluate(() => window.stops.map(stop => stop.index))).toEqual([0, 5, 5]);
+  expect(await page.evaluate(() => window.stops.map(stop => stop.index))).toEqual([0, 1, 10, 11, 10, 11]);
   await setKnob(page, 'voices', '2');
-  expect(await page.evaluate(() => window.stops.map(stop => stop.index))).toEqual([0, 5, 5, 1, 2, 3, 4, 6, 7]);
+  expect(await page.evaluate(() => window.stops.map(stop => stop.index))).toEqual([0, 1, 10, 11, 10, 11, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15]);
   await press(70);
-  expect(await page.evaluate(() => window.stops.at(-1).index)).toBe(8);
+  expect(await page.evaluate(() => window.stops.at(-1).index)).toBe(17);
   await setKnob(page, 'voices', '4');
   await press(71);
   await press(72);
-  expect(await page.evaluate(() => window.stops.length)).toBe(10);
+  expect(await page.evaluate(() => window.stops.length)).toBe(20);
 });
 
 test('knob keyboard, drag and reset update held-note tuning', async ({ page }) => {
@@ -216,7 +219,7 @@ test('knob keyboard, drag and reset update held-note tuning', async ({ page }) =
   expect(Number(await page.locator('#resonance input').inputValue())).toBeGreaterThan(0.1);
   await control.dblclick();
   await expect(page.locator('#resonance input')).toHaveValue('0.7');
-  expect(await page.evaluate(() => window.oscillators.length)).toBe(1);
+  expect(await page.evaluate(() => window.oscillators.length)).toBe(2);
 });
 
 test('sustain knob supports decimal values and updates the native envelope', async ({ page }) => {
@@ -259,3 +262,47 @@ test('uses eight knobs with labels below and ADSR on the bottom row', async ({ p
   await page.locator('#oscillator .knob_control').dblclick();
   await expect(oscillator).toHaveAttribute('aria-valuetext', 'triangle');
 });
+
+for (const [release, noteOff] of [[0, .005], [50, .9], [2200, 3]]) {
+  test(`detunes over decay and continues smoothly into ${release} ms release at ${noteOff}s`, async ({ page }) => {
+    await openSynth(page);
+    await expect(page.locator('#decay .parameter_label')).toHaveText('Decay (ms)');
+    await setKnob(page, 'release', String(release));
+    await page.locator('#instrument').focus();
+    await page.keyboard.down('y');
+    const held = await page.evaluate(() => ({
+      ramps: window.detuneRamps,
+      starts: window.oscillators.map(node => 1200 * Math.log2(window.parameterValues.get(node.frequency) / 440)),
+    }));
+    expect(held.starts).toEqual([0, 0]);
+    expect(held.ramps).toHaveLength(2);
+    expect(held.ramps[0].value).toBeCloseTo(-5, 6);
+    expect(held.ramps[1].value).toBeCloseTo(5, 6);
+    for (const ramp of held.ramps) expect(ramp.time).toBeCloseTo(1.80902, 6);
+    await page.evaluate(time => {
+      Object.defineProperty(window.oscillators[0].context, 'currentTime', { get: () => time });
+    }, noteOff);
+    await page.keyboard.up('y');
+    const result = await page.evaluate(() => ({
+      ramps: window.detuneRamps.slice(2),
+      gain: window.parameterValues.get(window.voiceGain),
+      starts: window.oscillators.map(node => 1200 * Math.log2(window.parameterValues.get(node.frequency) / 440)),
+      stops: window.stops,
+      envelope: window.ramps.at(-1),
+    }));
+    const peak = 1 / 12;
+    const sustain = peak * 10 ** (-12 / 20);
+    const level = noteOff <= .00901
+      ? .0001 * (peak / .0001) ** (noteOff / .00901)
+      : peak * (sustain / peak) ** Math.min(1, (noteOff - .00901) / (1.80902 - .00901));
+    expect(result.gain).toBeCloseTo(level, 6);
+    const spread = 5 * Math.max(0, Math.min(1, (noteOff - .00901) / (1.80902 - .00901)));
+    expect(result.starts[0]).toBeCloseTo(-spread, 6);
+    expect(result.starts[1]).toBeCloseTo(spread, 6);
+    expect(result.ramps).toHaveLength(2);
+    expect(result.ramps[0].value).toBeCloseTo(-10, 6);
+    expect(result.ramps[1].value).toBeCloseTo(10, 6);
+    for (const ramp of result.ramps) expect(ramp.time).toBeCloseTo(noteOff + release / 1000, 6);
+    expect(result.stops.map(stop => stop.time)).toEqual([result.envelope.time, result.envelope.time]);
+  });
+}

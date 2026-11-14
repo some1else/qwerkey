@@ -589,8 +589,8 @@ test("synth plays a live overdub on subsequent passes without restarting", async
   await page.keyboard.down("u");
   await page.waitForTimeout(150);
   await page.keyboard.up("u");
-  // U is MIDI pitch 73: one live voice, then at least two loop playback voices.
-  await expect.poll(() => page.evaluate(() => window.frequencies.filter(hz => Math.abs(hz - 440 * 2 ** (4 / 12)) < 0.1).length)).toBeGreaterThanOrEqual(3);
+  // U is MIDI pitch 73: one live unison pair, then at least two playback pairs.
+  await expect.poll(() => page.evaluate(() => window.frequencies.filter(hz => Math.abs(hz - 440 * 2 ** (4 / 12)) < 0.1).length)).toBeGreaterThanOrEqual(6);
   await page.locator("#buffer-mode").click();
   await expect(page.locator(".roll_note")).toHaveCount(2);
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");

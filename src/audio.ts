@@ -102,9 +102,20 @@ function createMixer(context: AudioContext): GainNode {
 }
 
 function startVoice(context: AudioContext, output: AudioNode, frequency: number, settings: SynthParameters, onEnded: () => void, velocity = 64): Voice {
-  const oscillator = context.createOscillator();
-  oscillator.type = settings.oscillator;
-  oscillator.frequency.value = frequency;
+  const oscillators = [-1, 1].map(direction => {
+    const oscillator = context.createOscillator();
+    oscillator.type = settings.oscillator;
+    oscillator.frequency.value = frequency;
+    return { oscillator, direction };
+  });
+  // The coherent unison pair has the same level as the original single voice.
+  const unison = context.createGain();
+  unison.gain.value = 0.5;
+  const panner = context.createStereoPanner();
+  const rootNote = 69 + 12 * Math.log2(frequency / 440);
+  // Spread the visible piano (MIDI 41–96) across the stereo field, clamping
+  // notes received outside that range to the nearest edge.
+  panner.pan.value = Math.max(-1, Math.min(1, (rootNote - 68.5) / 27.5));
   const gain = context.createGain();
   const now = context.currentTime;
   // A/D/R are milliseconds; S is amplitude in dB relative to the attack peak.
@@ -120,30 +131,42 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
     { time: now + attack + decay + 0.00002, value: sustain },
   ];
   gain.gain.value = 0.0001;
-  for (const point of points) gain.gain.linearRampToValueAtTime(point.value, point.time);
+  for (const point of points) gain.gain.exponentialRampToValueAtTime(point.value, point.time);
 
   const filter = context.createBiquadFilter();
   filter.type = 'lowpass';
   function tune(parameters: SynthParameters) {
-    oscillator.type = parameters.oscillator;
+    for (const { oscillator } of oscillators) oscillator.type = parameters.oscillator;
     // 440 is unity key tracking: every voice follows its own root frequency.
     filter.frequency.setValueAtTime(Math.min(context.sampleRate / 2, frequency * parameters.frequency / 440), context.currentTime);
     // Lowpass Q is expressed in dB by Web Audio; expose traditional linear Q.
     filter.Q.setValueAtTime(20 * Math.log10(parameters.resonance), context.currentTime);
   }
   tune(settings);
-  oscillator.connect(filter);
+  for (const { oscillator } of oscillators) oscillator.connect(unison);
+  unison.connect(filter);
   filter.connect(gain);
-  gain.connect(output);
+  gain.connect(panner);
+  panner.connect(output);
   let ended = false;
-  oscillator.onended = () => {
-    ended = true;
-    oscillator.disconnect();
-    filter.disconnect();
-    gain.disconnect();
-    onEnded();
-  };
-  oscillator.start(now);
+  let releasing = false;
+  let remaining = oscillators.length;
+  for (const { oscillator, direction } of oscillators) {
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      if (--remaining > 0) return;
+      ended = true;
+      unison.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+      panner.disconnect();
+      onEnded();
+    };
+    oscillator.start(now);
+    // Stay in unison through attack, then spread over the ADSR decay.
+    oscillator.frequency.setValueAtTime(frequency, points[1]!.time);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * 2 ** (direction * 5 / 1200), points[2]!.time);
+  }
 
   return {
     tune,
@@ -152,26 +175,36 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
       // Fade briefly when reusing a slot, including a voice already releasing.
       const time = context.currentTime;
       gain.gain.cancelAndHoldAtTime(time);
-      gain.gain.linearRampToValueAtTime(0, time + 0.005);
-      oscillator.stop(time + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.005);
+      for (const { oscillator } of oscillators) oscillator.stop(time + 0.005);
     },
     release() {
-      if (ended) return;
+      if (ended || releasing) return;
+      releasing = true;
       const time = context.currentTime;
       let value = sustain;
       let previous = points[0]!;
       for (const point of points.slice(1)) {
         if (time <= point.time) {
           const fraction = Math.max(0, (time - previous.time) / (point.time - previous.time));
-          value = previous.value + fraction * (point.value - previous.value);
+          value = previous.value * (point.value / previous.value) ** fraction;
           break;
         }
         previous = point;
       }
       gain.gain.cancelScheduledValues(time);
       gain.gain.setValueAtTime(value, time);
-      gain.gain.linearRampToValueAtTime(0.0001, time + release);
-      oscillator.stop(time + release);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + release);
+      const decayProgress = Math.max(0, Math.min(1,
+        (time - points[1]!.time) / (points[2]!.time - points[1]!.time)));
+      for (const { oscillator, direction } of oscillators) {
+        // Early note-off continues from the current decay detuning.
+        // Frequency stays positive for exponential ramps in either direction.
+        oscillator.frequency.cancelAndHoldAtTime(time);
+        oscillator.frequency.setValueAtTime(frequency * 2 ** (direction * 5 * decayProgress / 1200), time);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 2 ** (direction * 10 / 1200), time + release);
+        oscillator.stop(time + release);
+      }
     },
   };
 }

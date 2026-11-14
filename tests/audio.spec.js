@@ -103,3 +103,41 @@ for (const sampleRate of [44100, 48000]) {
     expect(await page.pageErrors()).toEqual([]);
   });
 }
+
+for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
+  test(`pans root note ${pitch} to the ${side} in rendered audio`, async ({ page }) => {
+    await page.addInitScript(() => {
+      window.AudioContext = function () {
+        const context = new OfflineAudioContext(2, 48000, 48000);
+        Object.defineProperty(context, 'state', { get: () => 'running' });
+        context.resume = async () => {};
+        window.renderContext = context;
+        return context;
+      };
+    });
+    await page.goto('./');
+    await page.locator('#enabler').click();
+    await page.locator('.piano_keys').evaluate(element => { element.setPointerCapture = () => {}; });
+    const key = page.locator(`.piano_keys .key_${pitch}`);
+    const box = await key.boundingBox();
+    await key.dispatchEvent('pointerdown', {
+      button: 0, pointerId: pitch,
+      clientX: box.x + box.width / 2, clientY: box.y + box.height * .85,
+    });
+    const energies = await page.evaluate(async () => {
+      const buffer = await window.renderContext.startRendering();
+      return [0, 1].map(channel => buffer.getChannelData(channel).reduce((sum, sample) => sum + sample * sample, 0));
+    });
+    if (side === 'left') {
+      expect(energies[0]).toBeGreaterThan(1);
+      expect(energies[1]).toBeLessThan(energies[0] * 1e-6);
+    } else if (side === 'right') {
+      expect(energies[1]).toBeGreaterThan(1);
+      expect(energies[0]).toBeLessThan(energies[1] * 1e-6);
+    } else {
+      expect(energies[0]).toBeGreaterThan(1);
+      expect(energies[1] / energies[0]).toBeCloseTo(Math.tan(((pitch - 68.5) / 27.5 + 1) * Math.PI / 4) ** 2, 2);
+    }
+    expect(await page.pageErrors()).toEqual([]);
+  });
+}
