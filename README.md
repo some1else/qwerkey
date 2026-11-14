@@ -38,7 +38,7 @@ Rebuild whenever the deployment base changes.
 The app uses Astro with a React instrument island, strict TypeScript, and the browser Web MIDI API.
 Run `npm run typecheck` to check browser code, or `npm run build` to check and
 bundle it with Vite. The app starts in Audio mode with a splash screen. Click “Click here to enable
-audio” to start the synthesizer, then use the Just play/Send MIDI output switch below the
+audio” to start the synthesizer, then use the Audio/Midi output switch below the
 keyboards to switch modes. Switching releases held notes. MIDI access is
 requested when MIDI mode is first selected. Safari keeps Audio selected and
 shows an explanation when its unavailable MIDI segment is activated.
@@ -113,8 +113,8 @@ returns to the instrument background. MIDI input highlights remain display-only.
 
 ## Recording and playback
 
-The **Keyboard** and **Buffer** tabs share a session recording. Choose **Just play** or **Send MIDI** under Keyboard to select the output. Every live keyboard note is captured automatically; selected MIDI
-input notes are also captured in Send MIDI mode, preserving channel and velocity.
+The **Keyboard** and **Buffer** tabs share a session recording. Choose **Audio** or **Midi** below either view to select the output. Every live keyboard note is captured automatically; selected MIDI
+input notes are also captured in Midi mode, preserving channel and velocity.
 While buffer playback is looping, incoming notes start at the current absolute
 playhead position, including when the editor is hidden. The roll and running
 transport share the current recording data, so overdubs play on subsequent passes
@@ -122,7 +122,7 @@ without restarting playback. Held notes retain their
 full elapsed duration across loop wraps or Stop. Outside playback, capture resumes
 at the buffer end with subsequent elapsed silence preserved.
 The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer retains the
-output selected through Just play or Send MIDI. Reloading the page resets
+output selected through Audio or Midi. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.
 
 The buffer uses an audio/ui piano roll with a seconds timeline and no musical
@@ -144,4 +144,4 @@ loop changes, note edits, and output changes; Space also works from the instrume
 the page stops playback and releases notes. Avoid routing a MIDI output back to
 the selected input, since external feedback is indistinguishable from live input.
 
-The Buffer view contains only the piano roll, ruler, and velocity lane. Toolbar actions (download, clear, and Fit) are no longer exposed.
+The Buffer toolbar provides Play loop, Stop, Clear buffer (with confirmation), Download, and Fit. Download saves selected notes first, otherwise the loop range, otherwise the entire buffer as MIDI. Fit trims unused trailing duration and frames the loop or buffer. The shared Output controls remain below both views. Audio parameters use two rows of four; Midi ports stack IN above OUT. Numeric fields support direct entry and keyboard adjustment without visible spinner arrows. Active notes, including buffer playback, highlight the computer keyboard.

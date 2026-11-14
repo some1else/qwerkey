@@ -27,7 +27,7 @@ export default function Instrument() {
   function selectMode(mode: Mode) {
     if (mode === "midi" && safari)
       window.alert(
-        "Qwerkey’s MIDI mode is unavailable in Safari. You can keep playing in Just play or open Qwerkey in a browser with Web MIDI support.",
+        "Qwerkey’s MIDI mode is unavailable in Safari. You can keep playing in Audio or open Qwerkey in a browser with Web MIDI support.",
       );
     else {
       controller.current?.releasePreview();
@@ -118,12 +118,13 @@ export default function Instrument() {
               />
             </>
           )}
+        </div>
           <div className="output_controls">
             <div className="output_choice">
               <span id="output-label">Output</span>
               <div className="mode_switch output_switch" role="group" aria-labelledby="output-label">
-                <button id="audio-mode" type="button" aria-pressed={state.mode === "audio"} onClick={() => selectMode("audio")}>Just play</button>
-                <button id="midi-mode" type="button" aria-pressed={state.mode === "midi"} aria-disabled={safari || undefined} onClick={() => selectMode("midi")}>Send MIDI</button>
+                <button id="audio-mode" type="button" aria-pressed={state.mode === "audio"} onClick={() => selectMode("audio")}>Audio</button>
+                <button id="midi-mode" type="button" aria-pressed={state.mode === "midi"} aria-disabled={safari || undefined} onClick={() => selectMode("midi")}>Midi</button>
               </div>
             </div>
           <div className="sound_controls">
@@ -135,7 +136,6 @@ export default function Instrument() {
             <MidiPorts state={state} controller={controller.current} />
           </div>
           </div>
-        </div>
       </div>
     </>
   );

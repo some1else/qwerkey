@@ -7,6 +7,7 @@ import {
   applyRollEdits,
   type RecordedNote,
 } from "../../instrument/recording";
+import { midiFile } from "../../instrument/midi-file";
 import { startLoop } from "../../instrument/transport";
 
 const MIN_RANGE_LENGTH = 0.001;
@@ -27,6 +28,7 @@ export default function RecordedBuffer({
   const [timelineEnd, setTimelineEnd] = useState(5);
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const confirmation = useRef<HTMLDialogElement>(null);
   const ruler = useRef<HTMLDivElement>(null);
   const gesture = useRef<{ id: number; x: number; time: number; moved: boolean } | null>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -164,6 +166,32 @@ export default function RecordedBuffer({
     setPlaying(true);
   }
 
+  const selectedNotes = notes.filter(note => selection.includes(note.id));
+  const downloadLabel = selectedNotes.length ? "Download selected notes" : range ? "Download loop range" : "Download entire buffer";
+  function download() {
+    const all = controller?.recording.snapshot() ?? [];
+    const selected = all.filter(note => selection.includes(note.id));
+    const bounds: [number, number] = selected.length
+      ? [Math.min(...selected.map(note => note.start)), Math.max(...selected.map(note => note.start + note.duration))]
+      : range ?? [0, Math.max(0.001, controller?.recording.extent() ?? 0, ...all.map(note => note.start + note.duration))];
+    const bytes = midiFile(clipNotes(selected.length ? selected : all, ...bounds), bounds[1] - bounds[0]);
+    const url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = selected.length ? "qwerkey-selection.mid" : range ? "qwerkey-range.mid" : "qwerkey-buffer.mid";
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function fit() {
+    const end = controller?.recording.trim() ?? 0;
+    const target = range ?? [0, Math.max(0.001, end)];
+    const width = body.current?.clientWidth ?? 600;
+    setTimelineEnd(Math.max(end, range?.[1] ?? 0, 0.001));
+    setZoom(Math.max(0.000001, (width - 24) / (target[1]! - target[0]!)));
+    updatePlayback();
+    requestAnimationFrame(() => { if (body.current) body.current.scrollLeft = Math.max(0, target[0]! * (width - 24) / (target[1]! - target[0]!) - 12); });
+  }
+
   function seek(time: number) {
     rangeRef.current = null;
     setRange(null);
@@ -253,6 +281,35 @@ export default function RecordedBuffer({
         applyEdits(notes.map(n => selected.some(item => item.id === n.id) ? { ...n, pitch: n.pitch + delta } : n));
       }}
     >
+      <div className="buffer_toolbar" role="group" aria-label="Buffer actions">
+        <div className="buffer_actions" role="group" aria-label="Transport">
+          <button onClick={play} disabled={playing || !notes.length}>Play loop</button>
+          <button onClick={stop} disabled={!playing}>Stop</button>
+        </div>
+        <div className="buffer_actions" role="group" aria-label="Recording actions">
+          <button onClick={() => confirmation.current?.showModal()}>Clear buffer</button>
+          <button onClick={download} disabled={!notes.length && !range}>{downloadLabel}</button>
+          <button onClick={fit}>Fit</button>
+        </div>
+        <span>{notes.length} notes · {extent.toFixed(2)} s</span>
+      </div>
+      <dialog ref={confirmation} aria-labelledby="clear-buffer-title" onClose={() => body.current?.focus()}>
+        <p id="clear-buffer-title">Clear the recorded buffer? This cannot be undone.</p>
+        <form method="dialog">
+          <button autoFocus>Cancel</button>
+          <button onClick={() => {
+            stop();
+            controller?.recording.clear();
+            setSelection([]);
+            setTimelineEnd(5);
+            rangeRef.current = null;
+            setRange(null);
+            positionRef.current = 0;
+            setPosition(0);
+            refresh();
+          }}>Clear recording</button>
+        </form>
+      </dialog>
       <Timeline.Root
         duration={duration}
         snapStep={0}

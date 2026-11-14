@@ -20,8 +20,8 @@ for (const width of [1000, 668]) {
     expect(input.y + input.height).toBeLessThan(output.y);
     await page.screenshot({ path: `/tmp/qwerkey-midi-${width}.png` });
     await page.locator('#buffer-mode').click();
-    await expect(page.locator('.output_controls')).toBeHidden();
-    await expect(page.locator('.buffer_toolbar')).toHaveCount(0);
+    await expect(page.locator('.output_controls')).toBeVisible();
+    await expect(page.locator('.buffer_toolbar')).toBeVisible();
     await expect(page.locator('.roll_velocity')).toBeVisible();
     await page.screenshot({ path: `/tmp/qwerkey-buffer-${width}.png` });
     await page.locator('#keyboard-mode').click();
@@ -34,3 +34,43 @@ for (const width of [1000, 668]) {
     await expect(page.locator('#buffer-mode')).toBeHidden();
   });
 }
+
+test('Buffer actions and shared output controls preserve settings and playback highlights', async ({ page }) => {
+  await page.goto('./');
+  await page.locator('#enabler').click();
+  await expect(page.locator('#audio-mode')).toHaveText('Audio');
+  await expect(page.locator('#midi-mode')).toHaveText('Midi');
+  await expect(page.locator('#attack')).toHaveCSS('appearance', 'textfield');
+  await page.locator('#attack').fill('12');
+  await page.locator('#instrument').focus();
+  await page.keyboard.down('y');
+  await page.waitForTimeout(800);
+  await page.keyboard.up('y');
+  await page.locator('#buffer-mode').click();
+  await expect(page.locator('#attack')).toHaveValue('12');
+  await expect(page.locator('#audio-mode')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Fit', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download entire buffer', exact: true }).click();
+  expect((await download).suggestedFilename()).toBe('qwerkey-buffer.mid');
+  await page.getByRole('button', { name: 'Play loop', exact: true }).click();
+  await page.locator('#keyboard-mode').click();
+  await expect(page.locator('.computer_keys [data-pitch="69"]')).toHaveClass(/key_active/);
+  await page.locator('#instrument').focus();
+  await page.keyboard.down('y');
+  await page.keyboard.up('y');
+  await expect(page.locator('.computer_keys [data-pitch="69"]')).toHaveClass(/key_active/);
+  await page.locator('#buffer-mode').click();
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await page.locator('#keyboard-mode').click();
+  await expect(page.locator('.computer_keys .key_active')).toHaveCount(0);
+  await page.locator('#buffer-mode').click();
+  await page.getByRole('button', { name: 'Clear buffer', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.roll_note')).not.toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear buffer', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear recording', exact: true }).click();
+  await expect(page.locator('.roll_note')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Play loop', exact: true })).toBeDisabled();
+});

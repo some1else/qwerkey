@@ -113,12 +113,19 @@ for (const mode of ['input', 'output', 'none', 'denied', 'unsupported']) {
   });
 }
 
-test('incoming duplicate pitch uses the first layout mapping', async ({ page }) => {
+test('incoming duplicate pitch highlights every matching key until its final release', async ({ page }) => {
   await openApp(page);
-  // Pitch 59 belongs to B and F1. The original lookup chooses B first.
+  // Pitch 59 belongs to B and F1; both represent the current note.
   await page.evaluate(() => window.receiveNote([144, 59, 100]));
   await expect(page.locator('.computer_keys .key_5_1')).toHaveClass(/key_active/);
-  await expect(page.locator('.computer_keys .key_2_5')).not.toHaveClass(/key_active/);
+  await expect(page.locator('.computer_keys .key_2_5')).toHaveClass(/key_active/);
+  await page.evaluate(() => {
+    window.receiveNote([145, 59, 100]);
+    window.receiveNote([128, 59, 0]);
+  });
+  await expect(page.locator('.computer_keys [data-pitch="59"].key_active')).toHaveCount(2);
+  await page.evaluate(() => window.receiveNote([129, 59, 0]));
+  await expect(page.locator('.computer_keys .key_active')).toHaveCount(0);
 });
 
 test('handles all channels, zero velocity, and unrelated MIDI messages', async ({ page }) => {

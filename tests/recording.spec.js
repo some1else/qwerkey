@@ -153,8 +153,8 @@ test("buffer records live notes and loops without recording itself", async ({
   await page.locator(".roll_viewport").focus();
   await page.keyboard.press("Space");
   await expect(buffer).toHaveAttribute("data-note-count", "1");
-  await expect(page.locator('.buffer_toolbar')).toHaveCount(0);
-  await expect(page.locator('.output_controls')).toBeHidden();
+  await expect(page.locator('.buffer_toolbar')).toBeVisible();
+  await expect(page.locator('.output_controls')).toBeVisible();
   await expect(page.locator('.roll_ruler')).toHaveCSS('position', 'sticky');
   const ruler = await page.locator('.roll_ruler').boundingBox();
   const viewport = await page.locator('.roll_viewport').boundingBox();

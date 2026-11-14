@@ -61,10 +61,9 @@ export function createController() {
       active.add(note.pitch);
       if (note.mapping) keys.add(note.mapping.code);
     }
-    for (const inputKey of incoming) {
-      const pitch = inputKey % 128;
-      const key = mappings.find((key) => key.noteNumber === pitch);
-      if (key) keys.add(key.code);
+    // Pitch-based sources (playback, audition, MIDI) have no physical key owner.
+    for (const key of mappings) {
+      if (active.has(key.noteNumber)) keys.add(key.code);
     }
     for (const key of mappings) {
       if (state.keys.has(key.code) === keys.has(key.code)) continue;

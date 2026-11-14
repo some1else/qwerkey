@@ -461,3 +461,18 @@ a {
   .sound_controls { margin-top: 0; }
   .computer_keys { margin-top: 2rem; }
 }
+
+.audio_parameters input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.audio_parameters input[type="number"]::-webkit-inner-spin-button,
+.audio_parameters input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.buffer_toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-bottom: 1rem; color: #999; font-size: .8125rem; }
+.buffer_actions { display: flex; }
+.recorded_buffer .buffer_actions button { padding: .5rem .75rem; border: 1px solid #777; border-radius: 0; background: #222; color: #999; font: inherit; font-weight: bold; line-height: 1.25rem; }
+.buffer_actions button + button { margin-left: -1px; }
+.recorded_buffer .buffer_actions button:first-child { border-radius: .375rem 0 0 .375rem; }
+.recorded_buffer .buffer_actions button:last-child { border-radius: 0 .375rem .375rem 0; }
+.recorded_buffer .buffer_actions button:hover:not(:disabled) { background: #333; border-color: #eee; color: #eee; z-index: 1; }
+.recorded_buffer .buffer_actions button:focus-visible { z-index: 2; }
+.recorded_buffer dialog { background: #292929; color: #eee; border: 1px solid #e49b26; border-radius: .4rem; }
+.recorded_buffer dialog::backdrop { background: #0009; }
+.recorded_buffer dialog form { display: flex; justify-content: flex-end; gap: .6rem; }
