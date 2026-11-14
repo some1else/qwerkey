@@ -53,7 +53,6 @@ function RecordedBuffer({
     draw();
     return () => cancelAnimationFrame(frame);
   }, [visible, zoom]);
-  const centered = useRef(false);
   const scroll = useRef({ left: 0, top: 0 });
   const generation = useRef(0);
   const loop = useRef<ReturnType<typeof startLoop> | null>(null);
@@ -92,13 +91,26 @@ function RecordedBuffer({
       if (!body.current) return;
       const bounds: readonly [number, number] = controller?.recording.capturedLoop() ?? rangeRef.current ??
         [0, Math.max(0.001, controller?.recording.extent() || 5)];
+      const snapshot = controller?.recording.snapshot() ?? [];
+      const loopNotes = snapshot.filter(note => note.start < bounds[1] && note.start + note.duration > bounds[0]);
       const fittedZoom = Math.max(0.000001, Math.min(1000000,
         Math.max(1, body.current.clientWidth - 32) / Math.max(0.001, bounds[1] - bounds[0])));
       setZoom(fittedZoom);
       frame = requestAnimationFrame(() => {
         if (!body.current) return;
         body.current.scrollLeft = Math.max(0, bounds[0] * fittedZoom - 16);
-        body.current.scrollTop = scroll.current.top;
+        const grid = body.current.querySelector<HTMLElement>('.roll_grid');
+        if (grid && loopNotes.length) {
+          const minPitch = snapshot.reduce((pitch, note) => Math.min(pitch, note.pitch), 41);
+          const maxPitch = snapshot.reduce((pitch, note) => Math.max(pitch, note.pitch), 96);
+          const low = loopNotes.reduce((pitch, note) => Math.min(pitch, note.pitch), 127);
+          const high = loopNotes.reduce((pitch, note) => Math.max(pitch, note.pitch), 0);
+          const rowHeight = grid.clientHeight / (maxPitch - minPitch + 1);
+          const gridTop = grid.getBoundingClientRect().top - body.current.getBoundingClientRect().top + body.current.scrollTop;
+          const rulerHeight = ruler.current?.offsetHeight ?? 0;
+          const center = gridTop + (maxPitch - (low + high) / 2 + 0.5) * rowHeight;
+          body.current.scrollTop = Math.max(0, center - (body.current.clientHeight + rulerHeight) / 2);
+        } else body.current.scrollTop = scroll.current.top;
       });
     });
     return () => cancelAnimationFrame(frame);
@@ -138,16 +150,6 @@ function RecordedBuffer({
       document.removeEventListener("visibilitychange", hidden);
     };
   }, [controller]);
-  useEffect(() => {
-    if (!centered.current && notes.length && body.current) {
-      body.current.scrollTop = Math.max(
-        0,
-        (notes.reduce((end, n) => Math.max(end, n.pitch), 96) - notes[0]!.pitch) * 18 -
-          180,
-      );
-      centered.current = true;
-    }
-  }, [notes]);
   function stop() {
     generation.current++;
     stopRef.current();
