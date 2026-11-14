@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import RecordedBuffer from "./RecordedBuffer";
 import type { PointerEvent } from "react";
 import { mappings } from "../../layout";
@@ -13,6 +13,18 @@ export default function Instrument() {
   const [tab, setTab] = useState<"audio" | "midi" | "buffer">("audio");
   const { state, ready, safari, controller, instrument, focus } =
     useInstrument();
+  useEffect(() => {
+    const mobile = window.matchMedia("(max-width: 667px)");
+    const update = () => {
+      if (!mobile.matches || tab !== "buffer") return;
+      const shouldFocus = document.activeElement?.closest(".recorded_buffer, #buffer-mode");
+      setTab(state.mode);
+      if (shouldFocus) requestAnimationFrame(() => document.getElementById(`${state.mode}-mode`)?.focus());
+    };
+    update();
+    mobile.addEventListener("change", update);
+    return () => mobile.removeEventListener("change", update);
+  }, [tab, state.mode]);
   function selectMode(mode: Mode) {
     if (mode === "midi" && safari)
       window.alert(
@@ -89,14 +101,14 @@ export default function Instrument() {
               event.currentTarget.querySelectorAll<HTMLButtonElement>(
                 '[role="tab"]',
               ),
-            );
+            ).filter(tab => tab.getClientRects().length > 0);
             const index = tabs.indexOf(event.target as HTMLButtonElement);
             const next =
               event.key === "Home"
                 ? 0
                 : event.key === "End"
-                  ? 2
-                  : (index + (event.key === "ArrowRight" ? 1 : 2)) % 3;
+                  ? tabs.length - 1
+                  : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
             tabs[next]?.click();
             tabs[next]?.focus();
           }}
@@ -146,18 +158,6 @@ export default function Instrument() {
           aria-labelledby={`${tab === "buffer" ? "buffer" : tab}-mode`}
         >
           <div hidden={tab !== "buffer"}>
-              <label>
-                Playback output{" "}
-                <select
-                  value={state.mode}
-                  onChange={(e) =>
-                    controller.current?.selectMode(e.target.value as Mode)
-                  }
-                >
-                  <option value="audio">Audio</option>
-                  {!safari && <option value="midi">MIDI</option>}
-                </select>
-              </label>
               <RecordedBuffer controller={controller.current} onPlayingChange={setBufferPlaying} visible={tab === "buffer"} />
           </div>
           {tab !== "buffer" && (

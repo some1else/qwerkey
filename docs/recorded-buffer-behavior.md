@@ -1,5 +1,7 @@
 # Recorded buffer behavior changes
 
+Controls and ruler gestures are superseded by [Recorded buffer UX](recorded-buffer-ux.md).
+
 Status: implemented. See the implementation record below.
 
 ## Behavior contract

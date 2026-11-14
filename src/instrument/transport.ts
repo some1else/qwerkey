@@ -8,6 +8,7 @@ export function startLoop(
     on(note: RecordedNote): void;
     off(note: RecordedNote): void;
     position(time: number): void;
+    startPosition?: number;
   },
   clock = () => performance.now() / 1000,
 ) {
@@ -21,7 +22,16 @@ export function startLoop(
   let cancelled = false,
     cycle = 0,
     index = 0;
-  let epoch = clock();
+  const initialPosition = Math.max(0, Math.min(output.startPosition ?? 0, length - 0.000001));
+  let epoch = clock() - initialPosition;
+  index = edges.findIndex(edge => edge.time > initialPosition);
+  if (index < 0) index = edges.length;
+  for (const note of notes) {
+    if (note.start <= initialPosition && note.start + note.duration > initialPosition) {
+      held.set(note.id, note);
+      output.on(note);
+    }
+  }
   let timer: ReturnType<typeof setTimeout>;
   const release = () => {
     held.forEach(output.off);

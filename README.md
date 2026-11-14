@@ -116,25 +116,28 @@ returns to the instrument background. MIDI input highlights remain display-only.
 The **Just play**, **Send MIDI**, and **Recorded buffer** tabs share a session
 recording. Every live keyboard note is captured automatically; selected MIDI
 input notes are also captured in Send MIDI mode, preserving channel and velocity.
-Opening Recorded buffer retains the selected output. Reloading the page resets
+The Recorded buffer tab is available above 667 px; recording and the Play/Stop
+buffer control remain available on mobile. Opening Recorded buffer retains the
+output selected through Just play or Send MIDI. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.
 
 The buffer uses an audio/ui piano roll with a seconds timeline and no musical
-meter or snapping. Scroll horizontally or zoom to inspect the recording. Fit trims
+meter or snapping. Scroll horizontally to inspect the recording. Scroll up on the
+ruler to zoom out or down to zoom in around the pointer. Fit trims
 unused trailing duration and frames the selected loop, or the whole buffer when
 no loop is selected, preserving note positions and leading silence.
 Select and drag notes to move them, drag their edges to resize, double-click
 empty space to draw, and use the velocity lane to change dynamics. Delete
-selected notes with the toolbar. Incoming held notes grow until release and
+selected notes with Backspace (or Delete) while focused in the note editor. Incoming held notes grow until release and
 cannot be edited until then. Up/Down transposes selected notes by a semitone;
 Shift+Up/Down uses an octave.
 Editor keyboard shortcuts do not play Tonnetz notes.
 
 Drag empty space on the seconds ruler to draw a loop in either direction, drag
 the highlighted body to move it, or drag its edges to resize it. Focus the loop
-or an edge and use arrow keys for 0.01-second adjustments, or enter exact loop
-start/end seconds. The time range is independent of selected notes; Clear range
-restores the whole-buffer loop. **Play loop** repeats that range (or the
+or an edge and use arrow keys for 0.01-second adjustments. Loop boundaries extend
+through the piano roll. The time range is independent of selected notes; a single
+click outside the loop clears it and places the playhead there. **Play loop** repeats that range (or the
 whole buffer); **Stop** returns to its beginning. Space toggles playback from the
 instrument background or note editor. Playback continues across application tabs,
 loop changes, note edits, and output changes; a play/stop control remains available
@@ -142,8 +145,10 @@ outside the editor. Playback and editor audition do not record themselves. Backg
 the page stops playback and releases notes. Avoid routing a MIDI output back to
 the selected input, since external feedback is indistinguishable from live input.
 
-**Download entire buffer** and **Download selected range** save standard `.mid`
-files, including clipped notes at selection boundaries. Selected ranges start
-at zero in the file and preserve silence. MIDI files use a fixed encoding tempo
+One download button saves selected notes first, otherwise the explicit loop,
+otherwise the whole buffer as a standard `.mid` file. Selected notes retain full
+durations and gaps, rebased to their earliest start; loop exports clip notes at
+both boundaries and preserve the exact range, including silence. MIDI files use a fixed encoding tempo
 of 60 BPM with millisecond ticks; the editor remains meterless. **Clear buffer**
-starts fresh, with an Undo clear action that restores the cleared performance.
+requires confirmation and starts fresh. Clearing cannot be undone; held live
+notes continue as fresh recordings.

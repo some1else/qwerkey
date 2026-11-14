@@ -1,5 +1,7 @@
 # Recording and playback plan
 
+Controls and ruler gestures are superseded by [Recorded buffer UX](recorded-buffer-ux.md).
+
 Playback continuity and Fit requirements are superseded by
 [Recorded buffer behavior changes](recorded-buffer-behavior.md).
 

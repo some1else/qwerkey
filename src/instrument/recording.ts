@@ -116,14 +116,7 @@ export function createRecording(clock = () => performance.now()) {
         this.start(key, note.pitch, note.channel, note.velocity, note.source);
       revision++;
     },
-    restore(previous: RecordedNote[]) {
-      const offset = Math.max(0, ...previous.map((n) => n.start + n.duration));
-      for (const note of notes) note.start += offset;
-      if (origin !== undefined) origin -= offset * 1000;
-      else origin = clock() - offset * 1000;
-      extent += offset;
-      this.replace([...previous, ...notes]);
-    },
+
   };
 }
 

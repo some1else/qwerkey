@@ -31,7 +31,9 @@ export default function RecordedBuffer({
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
   useEffect(() => onPlayingChange(playing), [playing, onPlayingChange]);
-  const [undo, setUndo] = useState<RecordedNote[] | null>(null);
+  const confirmation = useRef<HTMLDialogElement>(null);
+  const ruler = useRef<HTMLDivElement>(null);
+  const gesture = useRef<{ id: number; x: number; time: number; moved: boolean } | null>(null);
   const body = useRef<HTMLDivElement>(null);
   const keys = useRef<HTMLDivElement>(null);
   const centered = useRef(false);
@@ -126,6 +128,7 @@ export default function RecordedBuffer({
   }
   async function play() {
     if (!controller) return;
+    const requestedPosition = positionRef.current;
     stop();
     const attempt = generation.current;
     await controller.enable();
@@ -145,7 +148,9 @@ export default function RecordedBuffer({
     if (length <= 0) return;
     playbackNotes.current = snapshot;
     boundsRef.current = bounds;
+    const initial = requestedPosition >= bounds[0] && requestedPosition < bounds[1] ? requestedPosition : bounds[0];
     const cancel = startLoop(clipped, length, {
+      startPosition: initial - bounds[0],
       on: (n) =>
         controller.press(`playback:${n.id}`, { ...n, origin: "playback" }),
       off: (n) => controller.release(`playback:${n.id}`),
@@ -159,36 +164,54 @@ export default function RecordedBuffer({
       cancel();
       loop.current = null;
       setPlaying(false);
+      positionRef.current = boundsRef.current[0];
       setPosition(boundsRef.current[0]);
       stopRef.current = () => {};
     };
     setPlaying(true);
   }
 
-  function download(selected: boolean) {
+  const selectedNotes = notes.filter(n => selection.includes(n.id));
+  const downloadLabel = selectedNotes.length ? "Download selected notes" : range ? "Download loop range" : "Download entire buffer";
+  function download() {
     const all = controller?.recording.snapshot() ?? [];
-    const bounds: [number, number] =
-      selected && range
-        ? range
-        : [
-            0,
-            Math.max(
-              0.001,
-              controller?.recording.extent() ?? 0,
-              ...all.map((n) => n.start + n.duration),
-            ),
-          ];
-    const bytes = midiFile(
-      clipNotes(all, bounds[0], bounds[1]),
-      bounds[1] - bounds[0],
-    );
+    const selected = all.filter(n => selection.includes(n.id));
+    const bounds: [number, number] = selected.length
+      ? [Math.min(...selected.map(n => n.start)), Math.max(...selected.map(n => n.start + n.duration))]
+      : range ?? [0, Math.max(0.001, controller?.recording.extent() ?? 0, ...all.map(n => n.start + n.duration))];
+    const bytes = midiFile(clipNotes(selected.length ? selected : all, ...bounds), bounds[1] - bounds[0]);
     const url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = selected ? "qwerkey-range.mid" : "qwerkey-buffer.mid";
+    anchor.download = selected.length ? "qwerkey-selection.mid" : range ? "qwerkey-range.mid" : "qwerkey-buffer.mid";
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  function seek(time: number) {
+    rangeRef.current = null;
+    setRange(null);
+    positionRef.current = time;
+    if (loop.current) updatePlayback(null);
+    else setPosition(time);
+  }
+  useEffect(() => {
+    const element = ruler.current;
+    if (!element) return;
+    const wheel = (event: WheelEvent) => {
+      if (!event.deltaY || !body.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const viewport = body.current;
+      const x = event.clientX - viewport.getBoundingClientRect().left;
+      const time = (viewport.scrollLeft + x) / zoom;
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1);
+      const next = Math.max(0.000001, Math.min(1000000, zoom * Math.exp(Math.max(-1, Math.min(1, delta * 0.002)))));
+      setZoom(next);
+      requestAnimationFrame(() => { viewport.scrollLeft = Math.max(0, time * next - x); });
+    };
+    element.addEventListener("wheel", wheel, { passive: false, capture: true });
+    return () => element.removeEventListener("wheel", wheel, true);
+  }, [zoom]);
   function changeRange(next: readonly [number, number]) {
     if (
       next.every(Number.isFinite) &&
@@ -236,12 +259,17 @@ export default function RecordedBuffer({
       aria-label="Recorded buffer"
       data-note-count={notes.length}
       onKeyDownCapture={event => {
-        if (!["ArrowUp", "ArrowDown"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
+        if (!["ArrowUp", "ArrowDown", "Backspace", "Delete"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
         const target = event.target as Element;
-        if (!target.closest(".roll_grid") || !selection.length) return;
+        if (!target.closest(".roll_grid") || target.closest('input, textarea, select, [contenteditable]') || !selection.length) return;
         const selected = notes.filter(n => selection.includes(n.id) && !pending.has(n.id));
         if (!selected.length) return;
         event.preventDefault(); event.stopPropagation();
+        if (event.key === "Backspace" || event.key === "Delete") {
+          applyEdits((controller?.recording.snapshot() ?? []).filter(n => !selection.includes(n.id) || pending.has(n.id)));
+          setSelection([]);
+          return;
+        }
         const requested = (event.key === "ArrowUp" ? 1 : -1) * (event.shiftKey ? 12 : 1);
         const delta = Math.max(-Math.min(...selected.map(n => n.pitch)), Math.min(127 - Math.max(...selected.map(n => n.pitch)), requested));
         applyEdits(notes.map(n => selected.some(item => item.id === n.id) ? { ...n, pitch: n.pitch + delta } : n));
@@ -254,45 +282,8 @@ export default function RecordedBuffer({
         <button onClick={stop} disabled={!playing}>
           Stop
         </button>
-        <button
-          onClick={() => {
-            stop();
-            setUndo(controller?.recording.snapshot() ?? []);
-            controller?.recording.clear();
-            setSelection([]);
-            setTimelineEnd(5);
-            setRange(null);
-            setPosition(0);
-            refresh();
-          }}
-        >
-          Clear buffer
-        </button>
-        <button
-          disabled={!undo}
-          onClick={() => {
-            if (undo) {
-              stop();
-              controller?.recording.restore(undo);
-              setUndo(null);
-              refresh();
-            }
-          }}
-        >
-          Undo clear
-        </button>
-        <button onClick={() => download(false)} disabled={!notes.length}>
-          Download entire buffer
-        </button>
-        <button disabled={!range} onClick={() => download(true)}>
-          Download selected range
-        </button>
-        <button onClick={() => setZoom((z) => Math.min(1000, z * 1.5))}>
-          Zoom in
-        </button>
-        <button onClick={() => setZoom((z) => Math.max(0.1, z / 1.5))}>
-          Zoom out
-        </button>
+        <button onClick={() => confirmation.current?.showModal()}>Clear buffer</button>
+        <button onClick={download} disabled={!notes.length && !range}>{downloadLabel}</button>
         <button onClick={() => {
           const end = controller?.recording.trim() ?? 0;
           const target = range ?? [0, Math.max(0.001, end)];
@@ -306,46 +297,6 @@ export default function RecordedBuffer({
         }}>
           Fit
         </button>
-        <button
-          disabled={!selection.length}
-          onClick={() => {
-            applyEdits(
-              (controller?.recording.snapshot() ?? []).filter(
-                (n) => !selection.includes(n.id) || pending.has(n.id),
-              ),
-            );
-            setSelection([]);
-            refresh();
-          }}
-        >
-          Delete selected notes
-        </button>
-      </div>
-      <div className="buffer_toolbar">
-        {(["start", "end"] as const).map((edge, i) => (
-          <label key={edge}>
-            Loop {edge} (seconds){" "}
-            <input
-              type="number"
-              min="0"
-              step={KEYBOARD_STEP}
-              value={Number(effectiveRange[i]!.toFixed(3))}
-              onChange={(e) => {
-                const next: [number, number] = [...effectiveRange];
-                next[i] = Number(e.target.value);
-                changeRange(next);
-              }}
-            />
-          </label>
-        ))}
-        <button
-          onClick={() => {
-            setRange(null);
-            updatePlayback(null);
-          }}
-        >
-          Clear range
-        </button>
         <span>
           {notes.length} notes · {extent.toFixed(2)} s
         </span>
@@ -356,10 +307,24 @@ export default function RecordedBuffer({
           seconds ruler to select a loop.
         </p>
       )}
-      <p id="loop-ruler-help">
-        Drag empty ruler space to draw a loop, its body to move it, or its edges
-        to resize. Use arrow keys on the focused loop or edge for 0.01 s steps.
-      </p>
+      <dialog ref={confirmation} aria-labelledby="clear-buffer-title" onClose={() => body.current?.focus()}>
+        <p id="clear-buffer-title">Clear the recorded buffer? This cannot be undone.</p>
+        <form method="dialog">
+          <button autoFocus>Cancel</button>
+          <button onClick={() => {
+            stop();
+            controller?.recording.clear();
+            setSelection([]);
+            setTimelineEnd(5);
+            rangeRef.current = null;
+            setRange(null);
+            positionRef.current = 0;
+            setPosition(0);
+            playbackNotes.current = [];
+            refresh();
+          }}>Clear recording</button>
+        </form>
+      </dialog>
       <Timeline.Root
         duration={duration}
         snapStep={0}
@@ -421,7 +386,30 @@ export default function RecordedBuffer({
                   keys.current.style.transform = `translateY(${-event.currentTarget.scrollTop}px)`;
               }}
             >
-              <Timeline.Lane className="roll_ruler">
+              <Timeline.Lane className="roll_ruler" ref={ruler}
+                onPointerDown={event => {
+                  if (event.button !== 0 || (event.target as Element).closest(".roll_loop")) return;
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  gesture.current = { id: event.pointerId, x: event.clientX, time: Math.max(0, (event.clientX - event.currentTarget.getBoundingClientRect().left) / zoom), moved: false };
+                }}
+                onPointerMove={event => {
+                  const drag = gesture.current;
+                  if (!drag || drag.id !== event.pointerId) return;
+                  if (Math.abs(event.clientX - drag.x) >= 4) drag.moved = true;
+                  if (drag.moved) {
+                    const time = Math.max(0, Math.min(duration, (event.clientX - event.currentTarget.getBoundingClientRect().left) / zoom));
+                    const start = Math.min(drag.time, time);
+                    changeRange([start, Math.max(start + MIN_RANGE_LENGTH, drag.time, time)]);
+                  }
+                }}
+                onPointerUp={event => {
+                  const drag = gesture.current;
+                  gesture.current = null;
+                  if (drag && drag.id === event.pointerId && !drag.moved) seek(drag.time);
+                }}
+                onPointerCancel={() => { gesture.current = null; }}
+              >
                 {Array.from(
                   {
                     length: Math.min(
@@ -438,11 +426,9 @@ export default function RecordedBuffer({
                 <Timeline.Range
                   className="roll_loop"
                   aria-label="Loop range"
-                  aria-describedby="loop-ruler-help"
                   getAriaValueText={describeSeconds}
                   data-explicit={range ? "true" : "false"}
                   minDrawnWidth={60}
-                  drawable
                   minLength={MIN_RANGE_LENGTH}
                   value={effectiveRange}
                   onValueChange={changeRange}
@@ -478,6 +464,9 @@ export default function RecordedBuffer({
                   )}
                 </PianoRoll.Notes>
                 <PianoRoll.Marquee className="roll_marquee" />
+                {effectiveRange.map((time, i) => (
+                  <Timeline.Mark key={i} value={time} aria-hidden="true" className={`roll_boundary roll_boundary_${i ? "end" : "start"}`} />
+                ))}
                 <Timeline.Playhead className="roll_playhead" />
               </PianoRoll.Grid>
               <PianoRoll.VelocityLane

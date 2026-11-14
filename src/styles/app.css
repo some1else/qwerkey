@@ -376,7 +376,7 @@ a {
 
 .recorded_buffer { margin: 1.5rem auto; max-width: 1100px; text-align: left; padding: 1rem; }
 .buffer_toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .8rem; }
-.buffer_toolbar input { width: 6rem; }
+
 .roll_body { display: grid; grid-template-columns: 4rem minmax(0,1fr); max-height: 560px; overflow-y: auto; border: 1px solid #666; }
 .roll_keys { margin-top: 44px; position: relative; height: calc(var(--piano-roll-rows) * 18px); }
 .roll_keys button { border-radius: 0; font-size: 10px; padding: 0; }
@@ -431,3 +431,11 @@ a {
 .roll_loop_start::after { left: 2px; }
 .roll_loop_end::after { right: 2px; }
 .roll_loop_handle:hover, .roll_loop_handle:focus-within { background: #e49b2699; outline: 2px solid white; outline-offset: -2px; }
+
+@media (max-width: 667px) { #buffer-mode { display: none; } }
+.roll_boundary { top: 0; bottom: 0; width: 2px; background: #e49b26; pointer-events: none; z-index: 3; }
+.roll_boundary::before { content: ''; position: absolute; top: 0; width: 10px; height: 6px; border-top: 2px solid #e49b26; }
+.roll_boundary_end::before { right: 0; }
+.recorded_buffer dialog { background: #292929; color: #eee; border: 1px solid #e49b26; border-radius: .4rem; }
+.recorded_buffer dialog::backdrop { background: #0009; }
+.recorded_buffer dialog form { display: flex; justify-content: flex-end; gap: .6rem; }
