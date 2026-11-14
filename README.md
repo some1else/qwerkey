@@ -120,6 +120,12 @@ transport share the current recording data, so overdubs play on subsequent passe
 without restarting playback. Held notes retain their
 full elapsed duration across loop wraps or Stop. Outside playback, capture resumes
 at the buffer end with subsequent elapsed silence preserved.
+While playback is stopped, the first live note sets a new loop start in the
+buffer. Press Space (or Play) to set the loop end at that moment and start
+playback, including silence after the last note. Stop, then play a new phrase to
+capture another loop; starting playback without new notes reuses the existing
+region. Manually drawing, adjusting, or clearing the region takes over from this
+automatic capture for the current phrase.
 The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer retains the
 output selected through Audio or Midi. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.

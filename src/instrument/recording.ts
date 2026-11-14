@@ -21,6 +21,8 @@ export function createRecording(clock = () => performance.now()) {
   const indices = new Map<string, number>();
   const startedAt = new Map<string, number>();
   let capturePosition: ((timestamp: number) => number) | null = null;
+  let loopCapture: { start: number; timestamp: number } | null = null;
+  let loopCaptureArmed = true;
   const now = (timestamp = clock()) =>
     origin === undefined ? 0 : Math.max(0, (timestamp - origin) / 1000);
   const valid = (n: RecordedNote) =>
@@ -49,8 +51,32 @@ export function createRecording(clock = () => performance.now()) {
       if (capturePosition && !source) {
         const end = this.extent();
         origin = notes.length ? clock() - end * 1000 : undefined;
+        loopCaptureArmed = true;
+      }
+      if (source) {
+        loopCapture = null;
+        loopCaptureArmed = false;
       }
       capturePosition = source;
+    },
+    // A stopped performance includes silence up to the Play gesture. Keep its
+    // clock separate from note durations and from later buffer trimming.
+    capturedLoop(timestamp = clock()): [number, number] | null {
+      if (!loopCapture) return null;
+      return [loopCapture.start, loopCapture.start + Math.max(0.001, (timestamp - loopCapture.timestamp) / 1000)];
+    },
+    finishLoopCapture(timestamp = clock()) {
+      const bounds = this.capturedLoop(timestamp);
+      if (bounds) {
+        extent = Math.max(extent, bounds[1]);
+        this.cancelLoopCapture();
+        revision++;
+      }
+      return bounds;
+    },
+    cancelLoopCapture() {
+      if (loopCapture) loopCaptureArmed = false;
+      loopCapture = null;
     },
     get count() { return notes.length; },
     get revision() {
@@ -76,6 +102,8 @@ export function createRecording(clock = () => performance.now()) {
         duration: 0,
         source,
       };
+      if (!capturePosition && loopCaptureArmed && !loopCapture)
+        loopCapture = { start: note.start, timestamp };
       indices.set(note.id, notes.length);
       notes.push(note);
       pending.set(key, note);
@@ -134,6 +162,8 @@ export function createRecording(clock = () => performance.now()) {
       indices.clear();
       origin = undefined;
       extent = 0;
+      loopCapture = null;
+      loopCaptureArmed = !capturePosition;
       const held = [...pending.entries()];
       pending.clear();
       startedAt.clear();

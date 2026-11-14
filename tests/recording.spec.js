@@ -628,3 +628,113 @@ test("hidden recording avoids editor DOM and Space plays fresh capture", async (
   await page.getByRole("tab", { name: "Buffer", exact: true }).click();
   await expect(page.locator(".roll_note")).toHaveCount(1);
 });
+
+test("stopped phrases capture first onset through Play, retaining silence and held notes", () => {
+  let time = 1000;
+  const store = recording(() => time);
+  expect(store.finishLoopCapture()).toBeNull();
+  store.start("first", 60);
+  time = 1200;
+  store.end("first");
+  time = 1600;
+  store.start("second", 64);
+  time = 1800;
+  store.end("second");
+  time = 3000;
+  expect(store.finishLoopCapture()).toEqual([0, 2]);
+  expect(store.extent()).toBe(2);
+  expect(store.snapshot().map(n => n.duration)).toEqual([0.2, 0.2]);
+  expect(parse(midiFile(store.snapshot(), store.extent())).end).toBe(2000);
+  store.setCapturePosition(() => 0.5);
+  store.start("overdub", 67);
+  expect(store.capturedLoop()).toBeNull();
+  time = 3100;
+  store.end("overdub");
+  store.setCapturePosition(null);
+  time = 4100;
+  // Merely restarting playback does not replace the previous region.
+  expect(store.finishLoopCapture()).toBeNull();
+  store.start("next", 72, 3, 99, "midi");
+  expect(store.capturedLoop()).toEqual([3, 3.001]);
+  time = 5100;
+  expect(store.finishLoopCapture()).toEqual([3, 4]);
+  // Starting playback while held must not end the live note.
+  store.setCapturePosition(() => 3);
+  time = 5600;
+  store.end("next", 23);
+  expect(store.snapshot().at(-1)).toEqual(expect.objectContaining({
+    start: 3, duration: 1.5, channel: 3, velocity: 99, releaseVelocity: 23,
+  }));
+});
+
+test("manual loop edits override a phrase and Clear rearms first-note capture", () => {
+  let time = 0;
+  const store = recording(() => time);
+  store.start("first", 60);
+  store.cancelLoopCapture();
+  time = 100;
+  store.start("second", 64);
+  expect(store.finishLoopCapture()).toBeNull();
+  store.clear();
+  time = 500;
+  expect(store.finishLoopCapture()).toEqual([0, 0.4]);
+  store.finish();
+  store.clear();
+  expect(store.capturedLoop()).toBeNull();
+  time = 1000;
+  store.start("fresh", 67);
+  time = 2000;
+  expect(store.finishLoopCapture()).toEqual([0, 1]);
+});
+
+test("Space closes stopped phrases at the gesture, including silence, and rearms after Stop", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.gestures = [];
+    document.addEventListener("keydown", event => {
+      if (["KeyY", "KeyU", "Space"].includes(event.code))
+        window.gestures.push({ code: event.code, time: performance.now() });
+    }, true);
+  });
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.down("y");
+  await page.waitForTimeout(100);
+  await page.keyboard.up("y");
+  await page.waitForTimeout(400);
+  await page.keyboard.press("Space");
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  await page.keyboard.press("Space");
+  await page.locator("#buffer-mode").click();
+  const firstEnd = Number(await edge(page, "end").inputValue());
+  const firstTiming = await page.evaluate(() => (window.gestures[1].time - window.gestures[0].time) / 1000);
+  expect(Number(await edge(page, "start").inputValue())).toBe(0);
+  expect(firstEnd).toBeCloseTo(firstTiming, 1);
+  expect(firstEnd).toBeGreaterThan(0.5);
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("Space");
+  expect(Number(await edge(page, "end").inputValue())).toBe(firstEnd);
+  await page.locator("#keyboard-mode").click();
+  await page.locator("#instrument").focus();
+  await page.waitForTimeout(150);
+  await page.keyboard.down("u");
+  await page.waitForTimeout(100);
+  await page.keyboard.up("u");
+  // The loop start is visible before Play, and its end keeps following silence.
+  await page.locator("#buffer-mode").click();
+  await expect.poll(async () => Number(await edge(page, "start").inputValue())).toBeGreaterThan(firstEnd);
+  const secondStart = Number(await edge(page, "start").inputValue());
+  await page.waitForTimeout(300);
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  const secondEnd = Number(await edge(page, "end").inputValue());
+  const secondTiming = await page.evaluate(() => {
+    const onset = window.gestures.find(event => event.code === "KeyU");
+    return (window.gestures.at(-1).time - onset.time) / 1000;
+  });
+  expect(secondEnd - secondStart).toBeCloseTo(secondTiming, 1);
+  await page.waitForTimeout(100);
+  expect(Number(await edge(page, "end").inputValue())).toBe(secondEnd);
+  await expect(page.locator(".roll_note")).toHaveCount(2);
+});

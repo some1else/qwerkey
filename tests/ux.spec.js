@@ -60,7 +60,7 @@ test('Buffer actions and shared output controls preserve settings and playback h
   await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download', exact: true }).click();
-  expect((await download).suggestedFilename()).toBe('qwerkey-buffer.mid');
+  expect((await download).suggestedFilename()).toBe('qwerkey-range.mid');
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await page.locator('#keyboard-mode').click();
   await expect(page.locator('.computer_keys [data-pitch="69"]')).toHaveClass(/key_active/);

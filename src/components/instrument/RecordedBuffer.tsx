@@ -77,6 +77,13 @@ function RecordedBuffer({
   const duration = Math.max(timelineEnd, extent + 1, range?.[1] ?? 0);
   function refresh() {
     const snapshot = controller?.recording.snapshot() ?? [];
+    const captured = controller?.recording.capturedLoop();
+    if (!loop.current && captured) {
+      rangeRef.current = captured;
+      setRange(captured);
+      positionRef.current = captured[0];
+      if (visibleRef.current) setPosition(captured[0]);
+    }
     if (loop.current) updatePlayback(rangeRef.current, snapshot);
     else if (visibleRef.current) setNotes(snapshot);
   }
@@ -90,7 +97,7 @@ function RecordedBuffer({
     const timer = setInterval(() => {
       const store = controller?.recording;
       if (!store || (!visibleRef.current && !loop.current)) return;
-      if (store.revision !== revision) {
+      if (store.revision !== revision || (visibleRef.current && store.capturedLoop())) {
         revision = store.revision;
         refresh();
       } else if (visibleRef.current && store.pendingIds().size) {
@@ -147,7 +154,13 @@ function RecordedBuffer({
   }
   async function play() {
     if (!controller) return;
-    const requestedPosition = positionRef.current;
+    // Capture the gesture time before audio enabling can suspend this request.
+    const captured = controller.recording.finishLoopCapture();
+    if (captured) {
+      rangeRef.current = captured;
+      setRange(captured);
+    }
+    const requestedPosition = captured?.[0] ?? positionRef.current;
     stop();
     const attempt = generation.current;
     await controller.enable();
@@ -210,6 +223,7 @@ function RecordedBuffer({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function seek(time: number) {
+    controller?.recording.cancelLoopCapture();
     rangeRef.current = null;
     setRange(null);
     positionRef.current = time;
@@ -244,6 +258,8 @@ function RecordedBuffer({
       // Retain space exposed by an explicit range so drawing a shorter one
       // cannot shrink the lane and shift its scroll offset mid-gesture.
       setTimelineEnd(Math.max(duration, next[1]));
+      controller?.recording.cancelLoopCapture();
+      rangeRef.current = [next[0], next[1]];
       setRange([next[0], next[1]]);
       updatePlayback([next[0], next[1]]);
     }
