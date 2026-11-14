@@ -8,7 +8,6 @@ import {
   type RecordedNote,
 } from "../../instrument/recording";
 import { startLoop } from "../../instrument/transport";
-import { midiFile } from "../../instrument/midi-file";
 
 const MIN_RANGE_LENGTH = 0.001;
 const KEYBOARD_STEP = 0.01;
@@ -16,11 +15,9 @@ const describeSeconds = (value: number) => `${Number(value.toFixed(3))} seconds`
 
 export default function RecordedBuffer({
   controller,
-  onPlayingChange,
   visible,
 }: {
   controller: Controller | null;
-  onPlayingChange: (playing: boolean) => void;
   visible: boolean;
 }) {
   const [notes, setNotes] = useState<RecordedNote[]>([]);
@@ -30,8 +27,6 @@ export default function RecordedBuffer({
   const [timelineEnd, setTimelineEnd] = useState(5);
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
-  useEffect(() => onPlayingChange(playing), [playing, onPlayingChange]);
-  const confirmation = useRef<HTMLDialogElement>(null);
   const ruler = useRef<HTMLDivElement>(null);
   const gesture = useRef<{ id: number; x: number; time: number; moved: boolean } | null>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -169,22 +164,6 @@ export default function RecordedBuffer({
     setPlaying(true);
   }
 
-  const selectedNotes = notes.filter(n => selection.includes(n.id));
-  const downloadLabel = selectedNotes.length ? "Download selected notes" : range ? "Download loop range" : "Download entire buffer";
-  function download() {
-    const all = controller?.recording.snapshot() ?? [];
-    const selected = all.filter(n => selection.includes(n.id));
-    const bounds: [number, number] = selected.length
-      ? [Math.min(...selected.map(n => n.start)), Math.max(...selected.map(n => n.start + n.duration))]
-      : range ?? [0, Math.max(0.001, controller?.recording.extent() ?? 0, ...all.map(n => n.start + n.duration))];
-    const bytes = midiFile(clipNotes(selected.length ? selected : all, ...bounds), bounds[1] - bounds[0]);
-    const url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = selected.length ? "qwerkey-selection.mid" : range ? "qwerkey-range.mid" : "qwerkey-buffer.mid";
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
   function seek(time: number) {
     rangeRef.current = null;
     setRange(null);
@@ -256,6 +235,7 @@ export default function RecordedBuffer({
       className="recorded_buffer"
       aria-label="Recorded buffer"
       data-note-count={notes.length}
+      data-playing={playing}
       onKeyDownCapture={event => {
         if (!["ArrowUp", "ArrowDown", "Backspace", "Delete"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
         const target = event.target as Element;
@@ -273,54 +253,6 @@ export default function RecordedBuffer({
         applyEdits(notes.map(n => selected.some(item => item.id === n.id) ? { ...n, pitch: n.pitch + delta } : n));
       }}
     >
-      <div className="buffer_toolbar">
-        <button onClick={play} disabled={playing || !notes.length}>
-          Play loop
-        </button>
-        <button onClick={stop} disabled={!playing}>
-          Stop
-        </button>
-        <button onClick={() => confirmation.current?.showModal()}>Clear buffer</button>
-        <button onClick={download} disabled={!notes.length && !range}>{downloadLabel}</button>
-        <button onClick={() => {
-          const end = controller?.recording.trim() ?? 0;
-          const target = range ?? [0, Math.max(0.001, end)];
-          const width = body.current?.clientWidth ?? 600;
-          const nextZoom = Math.max(0.000001, (width - 24) / (target[1]! - target[0]!));
-          setTimelineEnd(Math.max(end, range?.[1] ?? 0, 0.001));
-          setZoom(nextZoom);
-          updatePlayback();
-          requestAnimationFrame(() => { if (body.current) body.current.scrollLeft = Math.max(0, target[0]! * nextZoom - 12); });
-        }}>
-          Fit
-        </button>
-        <span>
-          {notes.length} notes · {extent.toFixed(2)} s
-        </span>
-      </div>
-      {!notes.length && (
-        <p>
-          Play the keyboard or send MIDI to begin recording. Drag across the
-          seconds ruler to select a loop.
-        </p>
-      )}
-      <dialog ref={confirmation} aria-labelledby="clear-buffer-title" onClose={() => body.current?.focus()}>
-        <p id="clear-buffer-title">Clear the recorded buffer? This cannot be undone.</p>
-        <form method="dialog">
-          <button autoFocus>Cancel</button>
-          <button onClick={() => {
-            stop();
-            controller?.recording.clear();
-            setSelection([]);
-            setTimelineEnd(5);
-            rangeRef.current = null;
-            setRange(null);
-            positionRef.current = 0;
-            setPosition(0);
-            refresh();
-          }}>Clear recording</button>
-        </form>
-      </dialog>
       <Timeline.Root
         duration={duration}
         snapStep={0}

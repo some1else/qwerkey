@@ -9,8 +9,7 @@ import AudioParameters from "./AudioParameters";
 import MidiPorts from "./MidiPorts";
 import { ComputerKeyboard } from "./Keyboards";
 export default function Instrument() {
-  const [bufferPlaying, setBufferPlaying] = useState(false);
-  const [tab, setTab] = useState<"audio" | "midi" | "buffer">("audio");
+  const [tab, setTab] = useState<"keyboard" | "buffer">("keyboard");
   const { state, ready, safari, controller, instrument, focus } =
     useInstrument();
   useEffect(() => {
@@ -18,8 +17,8 @@ export default function Instrument() {
     const update = () => {
       if (!mobile.matches || tab !== "buffer") return;
       const shouldFocus = document.activeElement?.closest(".recorded_buffer, #buffer-mode");
-      setTab(state.mode);
-      if (shouldFocus) requestAnimationFrame(() => document.getElementById(`${state.mode}-mode`)?.focus());
+      setTab("keyboard");
+      if (shouldFocus) requestAnimationFrame(() => document.getElementById("keyboard-mode")?.focus());
     };
     update();
     mobile.addEventListener("change", update);
@@ -32,7 +31,6 @@ export default function Instrument() {
       );
     else {
       controller.current?.releasePreview();
-      setTab(mode);
       controller.current?.selectMode(mode);
     }
     focus();
@@ -89,82 +87,27 @@ export default function Instrument() {
         ref={instrument}
         style={{ textAlign: "center" }}
       >
-        <div
-          className="mode_switch"
-          role="tablist"
-          aria-label="Playback mode"
-          onKeyDown={(event) => {
-            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
-              return;
+        <div className="mode_switch" role="tablist" aria-label="View"
+          onKeyDown={event => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
             event.preventDefault();
-            const tabs = Array.from(
-              event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                '[role="tab"]',
-              ),
-            ).filter(tab => tab.getClientRects().length > 0);
+            const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')).filter(item => item.getClientRects().length);
             const index = tabs.indexOf(event.target as HTMLButtonElement);
-            const next =
-              event.key === "Home"
-                ? 0
-                : event.key === "End"
-                  ? tabs.length - 1
-                  : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
-            tabs[next]?.click();
-            tabs[next]?.focus();
-          }}
-        >
-          <button
-            id="audio-mode"
-            aria-controls="playback-panel"
-            tabIndex={tab === "audio" ? 0 : -1}
-            type="button"
-            role="tab"
-            aria-selected={tab === "audio"}
-            aria-pressed={tab === "audio"}
-            onClick={() => selectMode("audio")}
-          >
-            Just play
-          </button>
-          <button
-            id="midi-mode"
-            aria-controls="playback-panel"
-            tabIndex={tab === "midi" ? 0 : -1}
-            type="button"
-            role="tab"
-            aria-selected={tab === "midi"}
-            aria-pressed={tab === "midi"}
-            aria-disabled={safari || undefined}
-            onClick={() => selectMode("midi")}
-          >
-            Send MIDI
-          </button>
-          <button
-            id="buffer-mode"
-            aria-controls="playback-panel"
-            tabIndex={tab === "buffer" ? 0 : -1}
-            role="tab"
-            aria-selected={tab === "buffer"}
-            onClick={() => {
-              controller.current?.releaseLive();
-              setTab("buffer");
-            }}
-          >
-            Recorded buffer
-          </button>
-        </div>
-        <div
-          role="tabpanel"
-          id="playback-panel"
-          aria-labelledby={`${tab === "buffer" ? "buffer" : tab}-mode`}
-        >
-          <div hidden={tab !== "buffer"}>
-              <RecordedBuffer controller={controller.current} onPlayingChange={setBufferPlaying} visible={tab === "buffer"} />
-          </div>
-          {tab !== "buffer" && (
-            <button onClick={() => window.dispatchEvent(new Event("qwerkey:toggle-buffer"))}>
-              {bufferPlaying ? "Stop buffer" : "Play buffer"}
+            const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + 1) % tabs.length;
+            tabs[next]?.click(); tabs[next]?.focus();
+          }}>
+          {(["keyboard", "buffer"] as const).map(view => (
+            <button key={view} id={`${view}-mode`} type="button" role="tab"
+              aria-controls={`${view}-panel`} aria-selected={tab === view} tabIndex={tab === view ? 0 : -1}
+              onClick={() => { controller.current?.releaseLive(); setTab(view); }}>
+              {view === "keyboard" ? "Keyboard" : "Buffer"}
             </button>
-          )}
+          ))}
+        </div>
+        <div role="tabpanel" id="buffer-panel" aria-labelledby="buffer-mode" hidden={tab !== "buffer"}>
+          <RecordedBuffer controller={controller.current} visible={tab === "buffer"} />
+        </div>
+        <div role="tabpanel" id="keyboard-panel" aria-labelledby="keyboard-mode" hidden={tab !== "keyboard"}>
           {tab !== "buffer" && (
             <>
               <ComputerKeyboard state={state} onPointerDown={pointerDown} />
@@ -175,6 +118,14 @@ export default function Instrument() {
               />
             </>
           )}
+          <div className="output_controls">
+            <div className="output_choice">
+              <span id="output-label">Output</span>
+              <div className="mode_switch output_switch" role="group" aria-labelledby="output-label">
+                <button id="audio-mode" type="button" aria-pressed={state.mode === "audio"} onClick={() => selectMode("audio")}>Just play</button>
+                <button id="midi-mode" type="button" aria-pressed={state.mode === "midi"} aria-disabled={safari || undefined} onClick={() => selectMode("midi")}>Send MIDI</button>
+              </div>
+            </div>
           <div className="sound_controls">
             <AudioParameters
               parameters={state.parameters}
@@ -182,6 +133,7 @@ export default function Instrument() {
               controller={controller.current}
             />
             <MidiPorts state={state} controller={controller.current} />
+          </div>
           </div>
         </div>
       </div>
