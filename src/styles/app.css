@@ -354,9 +354,12 @@ a {
 .roll_grid { position: relative; height: calc(var(--piano-roll-rows) * 18px); background: #292929; }
 .roll_row { border-bottom: 1px solid #444; box-sizing: border-box; }
 .roll_row[data-color="black"] { background: #1c1c1c; }
-.roll_note { background: #e49b26; border: 1px solid #ffc567; border-radius: 2px; min-width: 2px; padding: 0; }
+.roll_note { background: #e49b26; border: 1px solid #ffc567; border-radius: 2px; min-width: 6px; padding: 0; }
 .roll_note[data-selected] { outline: 2px solid white; z-index: 2; }
-.roll_note > div { width: 6px; cursor: ew-resize; }
+.roll_note_handle { position: absolute; top: 0; bottom: 0; width: 25%; max-width: 8px; cursor: ew-resize; }
+.roll_note_handle[data-edge="start"] { left: 0; }
+.roll_note_handle[data-edge="end"] { right: 0; }
+.roll_note_handle:hover { background: #ffffff66; }
 .roll_marquee { border: 1px dashed white; background: #ffffff22; }
 .roll_playhead { width: 2px; top: 0; bottom: 0; background: white; pointer-events: none; }
 .roll_velocity { height: 70px; background: #333; }

@@ -488,8 +488,8 @@ function RecordedBuffer({
                       key={note.id}
                       note={note}
                     >
-                      <PianoRoll.NoteHandle edge="start" />
-                      <PianoRoll.NoteHandle edge="end" />
+                      <PianoRoll.NoteHandle className="roll_note_handle" edge="start" />
+                      <PianoRoll.NoteHandle className="roll_note_handle" edge="end" />
                     </PianoRoll.Note>
                   ) : null}
                 </PianoRoll.Notes>

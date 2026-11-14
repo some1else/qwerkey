@@ -252,6 +252,77 @@ test("editor selection, move, delete, range and tab navigation do not trigger li
   expect(await page.pageErrors()).toEqual([]);
 });
 
+test("note edges lengthen and shorten individual notes while the body still moves", async ({ page }) => {
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  for (const key of ["y", "x"]) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(200);
+    await page.keyboard.up(key);
+    await page.waitForTimeout(80);
+  }
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  const notes = page.locator(".roll_note");
+  await expect(notes).toHaveCount(2);
+  await expect.poll(async () => (await notes.nth(1).boundingBox())?.width ?? 0).toBeGreaterThan(100);
+  const note = notes.nth(1);
+  const original = await note.boundingBox();
+  const untouched = await notes.first().boundingBox();
+  const dragEdge = async (edge, delta) => {
+    const handle = note.locator(`.roll_note_handle[data-edge="${edge}"]`);
+    const box = await handle.boundingBox();
+    expect(box.height).toBeGreaterThan(10);
+    expect(box.width).toBeGreaterThan(0);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + delta, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+  };
+  const expectBounds = async (x, width) => {
+    await expect.poll(async () => {
+      const box = await note.boundingBox();
+      return Math.max(Math.abs(box.x - x), Math.abs(box.width - width));
+    }).toBeLessThan(2);
+  };
+  await dragEdge("end", 40);
+  await expectBounds(original.x, original.width + 40);
+  await dragEdge("end", -60);
+  await expectBounds(original.x, original.width - 20);
+  await dragEdge("start", -30);
+  await expectBounds(original.x - 30, original.width + 10);
+  await dragEdge("start", 50);
+  await expectBounds(original.x + 20, original.width - 40);
+  const other = await notes.first().boundingBox();
+  expect(other.x).toBeCloseTo(untouched.x, 1);
+  expect(other.width).toBeCloseTo(untouched.width, 1);
+
+  // The center retains a move target, including after resizing.
+  const resized = await note.boundingBox();
+  await page.mouse.move(resized.x + resized.width / 2, resized.y + resized.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(resized.x + resized.width / 2 + 20, resized.y + resized.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expectBounds(resized.x + 20, resized.width);
+
+  // Keyboard resizing uses the same edits and respects the 1 ms minimum.
+  await note.focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  const longer = await note.boundingBox();
+  expect(longer.width).toBeGreaterThan(resized.width);
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expectBounds(resized.x + 20, resized.width);
+  await dragEdge("end", -original.width * 2);
+  expect(await note.evaluate(el => Number(el.style.getPropertyValue('--timeline-length')))).toBeCloseTo(0.001, 6);
+  const shortest = await note.boundingBox();
+  expect(shortest.width).toBeGreaterThan(0);
+  expect(shortest.width).toBeLessThan(9);
+  // Short notes retain distinct edges and a body target.
+  const start = await note.locator('[data-edge="start"]').boundingBox();
+  const end = await note.locator('[data-edge="end"]').boundingBox();
+  expect(start.x + start.width).toBeLessThanOrEqual(end.x);
+  expect(await page.pageErrors()).toEqual([]);
+});
+
 test("editor merge preserves concurrent notes, channel metadata and pending identities", () => {
   let time = 0;
   const store = recording(() => time);

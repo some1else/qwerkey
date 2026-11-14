@@ -132,7 +132,7 @@ the buffer. Synth release tails and sound settings are not part of MIDI data.
 
 The buffer uses an audio/ui piano roll with a seconds timeline and no musical
 meter or snapping. Scroll horizontally to inspect the recording. Scroll up on the
-ruler to zoom out or down to zoom in around the pointer. Select and drag notes to move them, drag their edges to resize, double-click
+ruler to zoom out or down to zoom in around the pointer. Select and drag notes to move them. Drag a note's right edge to lengthen or shorten it, or its left edge to change its start while keeping its end fixed. Shift+Left/Right on a focused note adjusts its length in 10 ms steps, with a 1 ms minimum. Double-click
 empty space to draw, and use the velocity lane to change dynamics. Delete
 selected notes with Backspace (or Delete) while focused in the note editor. Incoming held notes grow until release and
 cannot be edited until then. Up/Down transposes selected notes by a semitone;
