@@ -101,7 +101,7 @@ function createMixer(context: AudioContext): GainNode {
   return mixer;
 }
 
-function startVoice(context: AudioContext, output: AudioNode, frequency: number, settings: SynthParameters, onEnded: () => void): Voice {
+function startVoice(context: AudioContext, output: AudioNode, frequency: number, settings: SynthParameters, onEnded: () => void, velocity = 64): Voice {
   const oscillator = context.createOscillator();
   oscillator.type = settings.oscillator;
   oscillator.frequency.value = frequency;
@@ -111,7 +111,7 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
   const attack = settings.attack / 1000;
   const decay = settings.decay / 1000;
   const release = settings.release / 1000;
-  const volume = voiceLevel;
+  const volume = voiceLevel * velocity / 64;
   const sustain = volume * 10 ** (settings.sustain / 20);
   // Tiny offsets keep zero-duration envelope stages ordered.
   const points = [
@@ -208,10 +208,10 @@ export function createSynth() {
     if (context.state !== 'running') throw new Error('Audio is suspended');
   }
 
-  function play(key: number, frequency: number) {
+  function play(key: number, frequency: number, velocity = 64) {
     if (!context || !mixer || context.state !== 'running' || heldNotes.has(key)) return;
     while (activeVoices.size >= parameters.voices) stealOldest();
-    const voice = startVoice(context, mixer, frequency, { ...parameters }, () => activeVoices.delete(voice));
+    const voice = startVoice(context, mixer, frequency, { ...parameters }, () => activeVoices.delete(voice), velocity);
     activeVoices.add(voice);
     heldNotes.set(key, voice);
   }

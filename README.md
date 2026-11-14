@@ -14,9 +14,9 @@ First commercial product to apply the principle was probably the [Opal Sonome ke
 
 ## Wishlist
 
-- [ ] Clicking a piano key reflects it on the keyboard
-- [ ] Send out MIDI
-- [ ] Recording and playback
+- [x] Clicking a piano key reflects it on the keyboard
+- [x] Send out MIDI
+- [x] Recording and playback
 ## Development
 
 Use Node.js 22.23.4 or newer and npm. Install packages and the test browser:
@@ -38,7 +38,7 @@ Rebuild whenever the deployment base changes.
 The app uses Astro with a React instrument island, strict TypeScript, and the browser Web MIDI API.
 Run `npm run typecheck` to check browser code, or `npm run build` to check and
 bundle it with Vite. The app starts in Audio mode with a splash screen. Click “Click here to enable
-audio” to start the synthesizer, then use the Audio/MIDI segments above the
+audio” to start the synthesizer, then use the Just play/Send MIDI tabs above the
 keyboards to switch modes. Switching releases held notes. MIDI access is
 requested when MIDI mode is first selected. Safari keeps Audio selected and
 shows an explanation when its unavailable MIDI segment is activated.
@@ -96,3 +96,65 @@ Type checking uses `astro check` and TypeScript 6, supported by the current Astr
 checker. The production build and Playwright tests use the same configured base.
 Migration tests bundle a separate React Strict Mode harness; no test route or
 controls are included in the deployed site.
+
+## Audio controls
+
+Audio controls use the headless `@audio-ui/react` primitives (pinned to 0.13.0),
+with Qwerkey's own CSS. Drag a knob vertically, use its wheel or keyboard, or
+enter an exact value in the number field below it. Shift gives finer knob drag;
+double-click/tap resets a knob to its default. Sustain uses a horizontal fader.
+Invalid numeric drafts keep the last accepted sound; blur or Escape restores
+that accepted value. The controller shares accepted settings between widgets.
+
+The piano also uses audio/ui: dragging across keys plays a glissando, each touch
+can hold a note, and arrow keys navigate the piano after focusing it. Space or
+Enter holds the focused note until release. QWERTY playing resumes when focus
+returns to the instrument background. MIDI input highlights remain display-only.
+
+## Recording and playback
+
+The **Just play**, **Send MIDI**, and **Recorded buffer** tabs share a session
+recording. Every live keyboard note is captured automatically; selected MIDI
+input notes are also captured in Send MIDI mode, preserving channel and velocity.
+While buffer playback is looping, incoming notes start at the current absolute
+playhead position, including when the editor is hidden. The roll and running
+transport share the current recording data, so overdubs play on subsequent passes
+without restarting playback. Held notes retain their
+full elapsed duration across loop wraps or Stop. Outside playback, capture resumes
+at the buffer end with subsequent elapsed silence preserved.
+The Recorded buffer tab is available above 667 px; recording and the Play/Stop
+buffer control remain available on mobile. Opening Recorded buffer retains the
+output selected through Just play or Send MIDI. Reloading the page resets
+the buffer. Synth release tails and sound settings are not part of MIDI data.
+
+The buffer uses an audio/ui piano roll with a seconds timeline and no musical
+meter or snapping. Scroll horizontally to inspect the recording. Scroll up on the
+ruler to zoom out or down to zoom in around the pointer. Fit trims
+unused trailing duration and frames the selected loop, or the whole buffer when
+no loop is selected, preserving note positions and leading silence.
+Select and drag notes to move them, drag their edges to resize, double-click
+empty space to draw, and use the velocity lane to change dynamics. Delete
+selected notes with Backspace (or Delete) while focused in the note editor. Incoming held notes grow until release and
+cannot be edited until then. Up/Down transposes selected notes by a semitone;
+Shift+Up/Down uses an octave.
+Editor keyboard shortcuts do not play Tonnetz notes.
+
+Drag empty space on the seconds ruler to draw a loop in either direction, drag
+the highlighted body to move it, or drag its edges to resize it. Focus the loop
+or an edge and use arrow keys for 0.01-second adjustments. Loop boundaries extend
+through the piano roll. The time range is independent of selected notes; a single
+click outside the loop clears it and places the playhead there. **Play loop** repeats that range (or the
+whole buffer); **Stop** returns to its beginning. Space toggles playback from the
+instrument background or note editor. Playback continues across application tabs,
+loop changes, note edits, and output changes; a play/stop control remains available
+outside the editor. Playback and editor audition do not record themselves. Backgrounding
+the page stops playback and releases notes. Avoid routing a MIDI output back to
+the selected input, since external feedback is indistinguishable from live input.
+
+One download button saves selected notes first, otherwise the explicit loop,
+otherwise the whole buffer as a standard `.mid` file. Selected notes retain full
+durations and gaps, rebased to their earliest start; loop exports clip notes at
+both boundaries and preserve the exact range, including silence. MIDI files use a fixed encoding tempo
+of 60 BPM with millisecond ticks; the editor remains meterless. **Clear buffer**
+requires confirmation and starts fresh. Clearing cannot be undone; held live
+notes continue as fresh recordings.

@@ -342,7 +342,7 @@ a {
 }
 
 @media (max-width: 667px) {
-	.mode_switch { display: none; }
+	.mode_switch { display: flex; }
 	.computer_keys { margin-top: 0; }
 	.piano_scroll { margin-top: 1.5rem; }
 	.sound_controls { margin-top: 1rem; }
@@ -351,3 +351,91 @@ a {
 	.computer_keys .hz { right: .2rem; font-size: .4375rem; }
 	.computer_keys .note { left: 0; padding: 0 .1rem; }
 }
+
+.audio_parameters { align-items: stretch; }
+.audio_parameter { display: flex; flex: 1; flex-direction: column; align-items: center; gap: .5rem; min-width: 0; }
+.audio_parameter.oscillator_parameter { flex: 1.2; }
+.audio_parameters .audio_parameter label { flex: none; white-space: nowrap; }
+.parameter_spacer, .parameter_knob, .parameter_fader { height: 3rem; width: 100%; }
+.knob_control { position: relative; width: 3rem; height: 3rem; margin: auto; cursor: ns-resize; }
+.knob_track, .knob_indicator { position: absolute; inset: 0; width: 100%; height: 100%; }
+.knob_track { color: #555; }
+.knob_indicator { color: orange; }
+.knob_thumb { position: absolute; inset: .5rem; border-radius: 50%; background: #333; }
+.knob_thumb > span { position: absolute; top: .15rem; left: calc(50% - 1px); width: 2px; height: .6rem; background: orange; }
+.parameter_knob:focus-within .knob_control, .parameter_fader:focus-within .fader_control { outline: 2px solid orange; outline-offset: 3px; border-radius: .375rem; }
+.fader_control { position: relative; height: 3rem; width: 100%; cursor: ew-resize; }
+.fader_track { position: absolute; top: calc(50% - 2px); left: 0; right: 0; height: 4px; background: #555; border-radius: 2px; }
+.fader_indicator { height: 100%; background: orange; border-radius: inherit; }
+.fader_thumb { position: absolute; top: calc(50% - .5rem); width: .6rem; height: 1rem; background: #eee; border-radius: 2px; }
+
+.piano_keys { width: 33rem; height: 4rem; }
+.piano_keys .key { top: 0; padding: 0; margin: 0; cursor: pointer; }
+.piano_keys .raised_key { height: 62%; z-index: 1; margin: 0; }
+.piano_keys .key:focus-visible { outline: 2px solid orange; outline-offset: -3px; z-index: 2; }
+
+.recorded_buffer { margin: 1.5rem auto; max-width: 1100px; text-align: left; padding: 1rem; }
+.buffer_toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .8rem; }
+
+.roll_body { display: grid; grid-template-columns: 4rem minmax(0,1fr); max-height: 560px; overflow-y: auto; border: 1px solid #666; }
+.roll_keys { margin-top: 44px; position: relative; height: calc(var(--piano-roll-rows) * 18px); }
+.roll_keys button { border-radius: 0; font-size: 10px; padding: 0; }
+.roll_keys button[data-color="black"] { background: #333; color: white; }
+.roll_viewport { overflow-x: auto; min-width: 0; }
+.roll_ruler { height: 44px; position: relative; background: #333; }
+
+.roll_grid { position: relative; height: calc(var(--piano-roll-rows) * 18px); background: #292929; }
+.roll_row { border-bottom: 1px solid #444; box-sizing: border-box; }
+.roll_row[data-color="black"] { background: #1c1c1c; }
+.roll_note { background: #e49b26; border: 1px solid #ffc567; border-radius: 2px; min-width: 2px; padding: 0; }
+.roll_note[data-selected] { outline: 2px solid white; z-index: 2; }
+.roll_note > div { width: 6px; cursor: ew-resize; }
+.roll_marquee { border: 1px dashed white; background: #ffffff22; }
+.roll_playhead { width: 2px; top: 0; bottom: 0; background: white; pointer-events: none; }
+.roll_velocity { height: 70px; background: #333; }
+.roll_velocity > div { width: 5px; background: orange; }
+.mode_switch button { width: auto; min-width: 6.5rem; white-space: nowrap; }
+.mode_switch button[aria-selected="true"] { background: #eee; color: black; }
+.roll_keys button { width: 100%; left: 0; right: 0; height: 100%; top: auto; border: 0; border-bottom: 1px solid #777; background: #ddd; color: #222; }
+.roll_keys button[data-active] { background: orange; color: #111; }
+.recorded_buffer button { padding: .4rem .65rem; border: 1px solid #777; border-radius: .25rem; background: #333; color: #eee; cursor: pointer; }
+.recorded_buffer button:disabled { opacity: .4; cursor: default; }
+.recorded_buffer button:hover:not(:disabled) { border-color: orange; }
+.recorded_buffer button:focus-visible { outline: 2px solid orange; outline-offset: 2px; }
+.recorded_buffer .roll_note { padding: 0; border-radius: 2px; background: #e49b26; border-color: #ffc567; }
+.roll_ruler .roll_tick { background: transparent; padding-left: 3px; font-size: 11px; border-left: 1px solid #777; }
+.mode_switch { width: max-content; max-width: calc(100% - 2rem); }
+.mode_switch button { flex: 0 0 auto; }
+.roll_body { height: 560px; overflow: hidden; }
+.roll_key_clip { position: relative; overflow: hidden; height: 560px; }
+.roll_key_clip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 44px; background: #333; z-index: 4; }
+.roll_viewport { height: 560px; overflow: auto; }
+.roll_ruler { position: sticky; top: 0; z-index: 4; }
+/* Timeline primitives set positioning inline; keep the ruler above vertically scrolled rows. */
+.roll_ruler { position: sticky !important; top: 0 !important; }
+.recorded_buffer .roll_keys button { background: #ddd; color: #222; border-radius: 0; border: 0; border-bottom: 1px solid #888; }
+.recorded_buffer .roll_keys button[data-color="black"] { background: #333; color: #eee; }
+.recorded_buffer .roll_keys button[data-active] { background: orange; color: #111; }
+
+.roll_ruler { cursor: crosshair; touch-action: none; user-select: none; }
+.roll_tick { pointer-events: none; z-index: 1; }
+.roll_loop { top: 0; height: 100%; box-sizing: border-box; background: #cc880044; border: 1px solid #e49b26; cursor: grab; }
+.roll_loop[data-explicit="false"] { background: #ffffff12; border-color: #999; }
+.roll_loop:hover, .roll_loop[data-dragging] { background: #cc880077; }
+.roll_loop[data-dragging] { cursor: grabbing; }
+.roll_loop:focus-within { outline: 2px solid white; outline-offset: -3px; }
+.roll_loop_handle { position: absolute; top: 0; bottom: 0; width: 24px; cursor: ew-resize; background: #e49b2644; }
+.roll_loop_handle::after { content: ''; position: absolute; top: 12px; bottom: 5px; width: 3px; background: #ffc567; }
+.roll_loop_start { left: 0; }
+.roll_loop_end { right: 0; }
+.roll_loop_start::after { left: 2px; }
+.roll_loop_end::after { right: 2px; }
+.roll_loop_handle:hover, .roll_loop_handle:focus-within { background: #e49b2699; outline: 2px solid white; outline-offset: -2px; }
+
+@media (max-width: 667px) { #buffer-mode { display: none; } }
+.roll_boundary { top: 0; bottom: 0; width: 2px; background: #e49b26; pointer-events: none; z-index: 3; }
+.roll_boundary::before { content: ''; position: absolute; top: 0; width: 10px; height: 6px; border-top: 2px solid #e49b26; }
+.roll_boundary_end::before { right: 0; }
+.recorded_buffer dialog { background: #292929; color: #eee; border: 1px solid #e49b26; border-radius: .4rem; }
+.recorded_buffer dialog::backdrop { background: #0009; }
+.recorded_buffer dialog form { display: flex; justify-content: flex-end; gap: .6rem; }

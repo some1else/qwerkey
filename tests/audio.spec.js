@@ -23,11 +23,14 @@ for (const sampleRate of [44100, 48000]) {
     await page.locator('#enabler').click();
     await expect(page.locator('.overlay')).toBeHidden();
     await page.locator('#voices').fill('64');
+    await page.locator('.piano_keys').evaluate(element => { element.setPointerCapture = () => {}; });
     await page.locator('.piano_keys .key').evaluateAll(keys => {
       keys.forEach((key, index) => {
         key.setPointerCapture = () => {};
+        const box = key.getBoundingClientRect();
         key.dispatchEvent(new PointerEvent('pointerdown', {
           bubbles: true, button: 0, pointerId: index + 1,
+          clientX: box.x + box.width / 2, clientY: box.y + box.height * .85,
         }));
       });
     });

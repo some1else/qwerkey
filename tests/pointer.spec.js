@@ -27,8 +27,7 @@ for (const [width, height] of [[375, 667], [666, 667], [667, 375], [668, 375], [
     expect(enable.x).toBeGreaterThanOrEqual(0);
     expect(enable.x + enable.width).toBeLessThanOrEqual(width);
     await page.locator('#enabler').click();
-    if (width <= 667) await expect(page.locator('.mode_switch')).toBeHidden();
-    else await expect(page.locator('.mode_switch')).toBeVisible();
+    await expect(page.locator('.mode_switch')).toBeVisible();
     const instrument = await page.locator('#instrument').boundingBox();
     if (instrument.height <= height - 16) {
       expect(instrument.y + instrument.height / 2).toBeCloseTo(height / 2, 0);
@@ -140,3 +139,73 @@ for (const cleanup of ['blur', 'pagehide', 'visibility', 'mode']) {
     expect(await page.evaluate(() => window.audioCalls.releases)).toBe(1);
   });
 }
+
+test('native piano glides between keys and keeps a QWERTY owner sounding', async ({ page }) => {
+  await observeAudio(page);
+  await page.keyboard.down('y');
+  const a = await page.locator('.piano_keys .key_69').boundingBox();
+  const b = await page.locator('.piano_keys .key_71').boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height * .85);
+  await page.mouse.down();
+  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(1);
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height * .85, { steps: 4 });
+  await expect(page.locator('.piano_keys .key_69')).toHaveClass(/key_active/);
+  await expect(page.locator('.piano_keys .key_71')).toHaveClass(/key_active/);
+  await page.mouse.up();
+  await expect(page.locator('.piano_keys .key_71')).not.toHaveClass(/key_active/);
+  await expect(page.locator('.piano_keys .key_69')).toHaveClass(/key_active/);
+  await page.keyboard.up('y');
+  await expect(page.locator('.key_active')).toHaveCount(0);
+});
+
+test('piano keyboard navigation plays Space and isolates QWERTY typing', async ({ page }) => {
+  await observeAudio(page);
+  const key = page.locator('.piano_keys .key_60');
+  await key.focus();
+  await page.keyboard.press('y');
+  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(0);
+  await page.keyboard.down('Space');
+  await expect(key).toHaveClass(/key_active/);
+  await page.keyboard.up('Space');
+  await expect(key).not.toHaveClass(/key_active/);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.piano_keys .key_61')).toBeFocused();
+});
+
+test('two piano touch owners of one pitch release independently', async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true });
+  const page = await context.newPage();
+  await page.goto('./');
+  await observeAudio(page);
+  const client = await context.newCDPSession(page);
+  const box = await page.locator('.piano_keys .key_69').boundingBox();
+  const point = { x: box.x + box.width / 2, y: box.y + box.height * .85 };
+  const first = { ...point, id: 1 };
+  const second = { ...point, id: 2, x: point.x + 1 };
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first, second] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [second] });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 0 });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 1 });
+  await context.close();
+});
+
+test('buffer tab hides on mobile and resize returns focus to the output tab', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 900 });
+  await page.locator('#enabler').click();
+  await page.locator('#buffer-mode').click();
+  await page.locator('.roll_loop_start input').focus();
+  await page.setViewportSize({ width: 667, height: 900 });
+  await expect(page.locator('#buffer-mode')).toBeHidden();
+  await expect(page.locator('#audio-mode')).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.locator('#midi-mode')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#audio-mode')).toBeFocused();
+  for (const width of [375, 666, 667, 668]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width <= 667) await expect(page.locator('#buffer-mode')).toBeHidden();
+    else await expect(page.locator('#buffer-mode')).toBeVisible();
+  }
+});

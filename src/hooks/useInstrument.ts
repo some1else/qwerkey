@@ -16,7 +16,7 @@ export function useInstrument() {
     setSafari(/Safari/i.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS|Android/i.test(navigator.userAgent));
     const keyboard = (event: KeyboardEvent, active: boolean) => {
       if (!active) { runtime.release(`keyboard:${event.keyCode}`); return; }
-      if (event.target instanceof Element && event.target.closest('select, input, textarea, button, [contenteditable]')) return;
+      if (event.target instanceof Element && event.target.closest('select, input, textarea, button, [contenteditable], .recorded_buffer')) return;
       if (!runtime.getSnapshot().enabled) return;
       const key = byCode.get(event.keyCode);
       if (!key) { if (event.key !== 'Tab') event.preventDefault(); return; }
