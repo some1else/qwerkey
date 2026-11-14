@@ -113,12 +113,19 @@ for (const mode of ['input', 'output', 'none', 'denied', 'unsupported']) {
   });
 }
 
-test('incoming duplicate pitch uses the first layout mapping', async ({ page }) => {
+test('incoming duplicate pitch highlights every matching key until its final release', async ({ page }) => {
   await openApp(page);
-  // Pitch 59 belongs to B and F1. The original lookup chooses B first.
+  // Pitch 59 belongs to B and F1; both represent the current note.
   await page.evaluate(() => window.receiveNote([144, 59, 100]));
   await expect(page.locator('.computer_keys .key_5_1')).toHaveClass(/key_active/);
-  await expect(page.locator('.computer_keys .key_2_5')).not.toHaveClass(/key_active/);
+  await expect(page.locator('.computer_keys .key_2_5')).toHaveClass(/key_active/);
+  await page.evaluate(() => {
+    window.receiveNote([145, 59, 100]);
+    window.receiveNote([128, 59, 0]);
+  });
+  await expect(page.locator('.computer_keys [data-pitch="59"].key_active')).toHaveCount(2);
+  await page.evaluate(() => window.receiveNote([129, 59, 0]));
+  await expect(page.locator('.computer_keys .key_active')).toHaveCount(0);
 });
 
 test('handles all channels, zero velocity, and unrelated MIDI messages', async ({ page }) => {
@@ -197,11 +204,11 @@ test('refreshes devices without overriding choices and clears disconnected selec
 
 test('dropdown keyboard navigation does not play notes', async ({ page }) => {
   await openApp(page, 'multiple');
-  await page.locator('#midi-output').focus();
+  await page.locator('#midi-input').focus();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('y');
   await page.keyboard.press('Tab');
-  await expect(page.locator('#midi-input')).toBeFocused();
+  await expect(page.locator('#midi-output')).toBeFocused();
   expect(await page.evaluate(() => window.midiMessages)).toEqual([]);
   await expect(page.locator('.key_active')).toHaveCount(0);
 });
@@ -209,17 +216,17 @@ test('dropdown keyboard navigation does not play notes', async ({ page }) => {
 test('places port controls below the piano within the minimum page width', async ({ page }) => {
   await openApp(page);
   const controls = page.locator('.midi_ports');
-  const output = page.locator('.midi_port').first();
-  const input = page.locator('.midi_port').last();
+  const output = page.locator('.midi_port').last();
+  const input = page.locator('.midi_port').first();
   const pianoBox = await page.locator('.piano_keys').boundingBox();
   const controlsBox = await controls.boundingBox();
   expect(controlsBox.y).toBeGreaterThanOrEqual(pianoBox.y + pianoBox.height);
-  expect((await output.boundingBox()).y).toBe((await input.boundingBox()).y);
+  expect((await output.boundingBox()).y).toBeGreaterThan((await input.boundingBox()).y);
   await controls.screenshot({ path: '/tmp/qwerkey-ports-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
   const outputBox = await output.boundingBox();
   const inputBox = await input.boundingBox();
-  expect(inputBox.y).toBe(outputBox.y);
+  expect(inputBox.y).toBeLessThan(outputBox.y);
   expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(667);
   await controls.screenshot({ path: '/tmp/qwerkey-ports-mobile.png' });
 });
@@ -228,10 +235,11 @@ test('Audio and MIDI share a stable controls row above 667px', async ({ page }) 
   await page.setViewportSize({ width: 668, height: 900 });
   await openApp(page, 'both', false);
   await page.locator('#enabler').click();
-  const layout = () => page.locator('.mode_switch, .computer_keys, .piano_scroll, .midi_ports')
+  const layout = () => page.locator('.computer_keys, .piano_scroll, .sound_controls')
     .evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
   const audioLayout = await layout();
-  await expect(page.getByRole('combobox')).toHaveCount(1);
+  await expect(page.getByRole('slider')).toHaveCount(8);
+  await expect(page.getByRole('combobox')).toHaveCount(0);
   await page.locator('#midi-mode').click();
   await expect(page.getByRole('combobox')).toHaveCount(2);
   expect(await layout()).toEqual(audioLayout);
@@ -252,12 +260,12 @@ test('defaults to Audio behind the splash and delays MIDI access', async ({ page
   await page.keyboard.press('y');
   expect(await page.evaluate(() => window.midiRequests)).toBe(0);
   expect(await page.evaluate(() => window.midiMessages)).toEqual([]);
-  const switchBox = await page.locator('.mode_switch').boundingBox();
+  const switchBox = await page.locator('.mode_switch').first().boundingBox();
   const keyboardBox = await page.locator('.computer_keys').boundingBox();
   expect(switchBox.y + switchBox.height).toBeLessThan(keyboardBox.y);
   await page.screenshot({ path: '/tmp/qwerkey-audio-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.mode_switch')).toBeVisible();
+  await expect(page.locator('.mode_switch').first()).toBeVisible();
 });
 
 test('switching releases audio and MIDI notes and preserves selected ports', async ({ page }) => {

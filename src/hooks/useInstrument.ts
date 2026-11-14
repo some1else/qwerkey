@@ -11,7 +11,26 @@ export function useInstrument() {
   useEffect(() => {
     const runtime = createController();
     controller.current = runtime;
-    const unsubscribe = runtime.subscribe(setState);
+    let frame = 0;
+    let previous = runtime.getSnapshot();
+    let pressed = new Set<number>(), pitches = new Set<number>();
+    const unsubscribe = runtime.subscribe(next => {
+      for (const key of next.keys) pressed.add(key);
+      for (const pitch of next.active) pitches.add(pitch);
+      if (next.enabled !== previous.enabled || next.mode !== previous.mode || next.parameters !== previous.parameters || next.ports !== previous.ports || next.interaction !== previous.interaction || next.busy !== previous.busy || next.error !== previous.error) {
+        cancelAnimationFrame(frame); frame = 0;
+        pressed.clear(); pitches.clear(); setState(next);
+      } else if (!frame) {
+        frame = requestAnimationFrame(() => {
+          const latest = runtime.getSnapshot();
+          const transient = [...pressed].some(key => !latest.keys.has(key));
+          setState(transient ? { ...latest, keys: new Set([...latest.keys, ...pressed]), active: new Set([...latest.active, ...pitches]) } : latest);
+          pressed.clear(); pitches.clear(); frame = 0;
+          if (transient) frame = requestAnimationFrame(() => { frame = 0; pressed.clear(); pitches.clear(); setState(runtime.getSnapshot()); });
+        });
+      }
+      previous = next;
+    });
     setState(runtime.getSnapshot()); setReady(true);
     setSafari(/Safari/i.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS|Android/i.test(navigator.userAgent));
     const keyboard = (event: KeyboardEvent, active: boolean) => {
@@ -31,7 +50,7 @@ export function useInstrument() {
     window.addEventListener('blur', runtime.releaseAll); window.addEventListener('pagehide', runtime.releaseAll);
     document.addEventListener('visibilitychange', visibility);
     return () => {
-      unsubscribe(); controller.current = null;
+      unsubscribe(); cancelAnimationFrame(frame); controller.current = null;
       document.removeEventListener('keydown', down); document.removeEventListener('keyup', up);
       for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) document.removeEventListener(name, release);
       window.removeEventListener('blur', runtime.releaseAll); window.removeEventListener('pagehide', runtime.releaseAll);

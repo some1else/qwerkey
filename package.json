@@ -5,7 +5,7 @@
     "url": "git@github.com:Some1Else/qwerkey.git",
     "type": "git"
   },
-  "author": "Srđan Prodanović <srdjan.prodanovic@gmail.com>",
+  "author": "Sr\u0111an Prodanovi\u0107 <srdjan.prodanovic@gmail.com>",
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
     "@playwright/test": "1.65.0",
@@ -24,7 +24,8 @@
     "build": "npm run typecheck && astro build",
     "preview": "astro preview",
     "test": "npm run build && playwright test",
-    "typecheck": "astro check"
+    "typecheck": "astro check",
+    "benchmark": "node scripts/benchmark.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^7.1.9",

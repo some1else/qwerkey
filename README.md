@@ -38,7 +38,7 @@ Rebuild whenever the deployment base changes.
 The app uses Astro with a React instrument island, strict TypeScript, and the browser Web MIDI API.
 Run `npm run typecheck` to check browser code, or `npm run build` to check and
 bundle it with Vite. The app starts in Audio mode with a splash screen. Click “Click here to enable
-audio” to start the synthesizer, then use the Just play/Send MIDI tabs above the
+audio” to start the synthesizer, then use the Audio/Midi output switch below the
 keyboards to switch modes. Switching releases held notes. MIDI access is
 requested when MIDI mode is first selected. Safari keeps Audio selected and
 shows an explanation when its unavailable MIDI segment is activated.
@@ -57,14 +57,13 @@ mode changes for the current page session.
 
 Each audio voice peaks at 1/12 so twelve simultaneous voices reach 0 dBFS at a
 unity-gain mixer. The mixer feeds a compressor, +4 dB makeup gain, and a fast
-limiter. The audio context runs at 192 kHz where supported, oversampling the
-whole chain, and a 4× oversampled soft clip rounds off limiter overshoots. A
+limiter. The audio context uses the output device’s preferred sample rate. A 4× oversampled soft clip rounds off limiter overshoots. A
 final safety ceiling bounds output samples to -1 dBFS, including transients and
 dense chords.
 
 In MIDI mode, keyboard presses send MIDI notes on channel 1 to `Qwerkey Out`.
-Incoming notes from the selected input highlight the keyboards. The Output and
-Input dropdowns below the piano, visible in MIDI mode, list available MIDI ports. Each defaults to
+Incoming notes from the selected input highlight the keyboards. The Input and
+Output dropdowns below the piano, visible in MIDI mode, list available MIDI ports. Each defaults to
 `Qwerkey Out` or `Qwerkey In` respectively when present; otherwise it shows
 `-- Choose MIDI port --`. Choose any available port, or choose the placeholder
 to disable that direction. Changes apply immediately and selections last for
@@ -113,26 +112,21 @@ returns to the instrument background. MIDI input highlights remain display-only.
 
 ## Recording and playback
 
-The **Just play**, **Send MIDI**, and **Recorded buffer** tabs share a session
-recording. Every live keyboard note is captured automatically; selected MIDI
-input notes are also captured in Send MIDI mode, preserving channel and velocity.
+The **Keyboard** and **Buffer** tabs share a session recording. Choose **Audio** or **Midi** below either view to select the output. Every live keyboard note is captured automatically; selected MIDI
+input notes are also captured in Midi mode, preserving channel and velocity.
 While buffer playback is looping, incoming notes start at the current absolute
 playhead position, including when the editor is hidden. The roll and running
 transport share the current recording data, so overdubs play on subsequent passes
 without restarting playback. Held notes retain their
 full elapsed duration across loop wraps or Stop. Outside playback, capture resumes
 at the buffer end with subsequent elapsed silence preserved.
-The Recorded buffer tab is available above 667 px; recording and the Play/Stop
-buffer control remain available on mobile. Opening Recorded buffer retains the
-output selected through Just play or Send MIDI. Reloading the page resets
+The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer retains the
+output selected through Audio or Midi. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.
 
 The buffer uses an audio/ui piano roll with a seconds timeline and no musical
 meter or snapping. Scroll horizontally to inspect the recording. Scroll up on the
-ruler to zoom out or down to zoom in around the pointer. Fit trims
-unused trailing duration and frames the selected loop, or the whole buffer when
-no loop is selected, preserving note positions and leading silence.
-Select and drag notes to move them, drag their edges to resize, double-click
+ruler to zoom out or down to zoom in around the pointer. Select and drag notes to move them, drag their edges to resize, double-click
 empty space to draw, and use the velocity lane to change dynamics. Delete
 selected notes with Backspace (or Delete) while focused in the note editor. Incoming held notes grow until release and
 cannot be edited until then. Up/Down transposes selected notes by a semitone;
@@ -143,18 +137,10 @@ Drag empty space on the seconds ruler to draw a loop in either direction, drag
 the highlighted body to move it, or drag its edges to resize it. Focus the loop
 or an edge and use arrow keys for 0.01-second adjustments. Loop boundaries extend
 through the piano roll. The time range is independent of selected notes; a single
-click outside the loop clears it and places the playhead there. **Play loop** repeats that range (or the
-whole buffer); **Stop** returns to its beginning. Space toggles playback from the
+click outside the loop clears it and places the playhead there. Space plays that range (or the whole buffer) in a loop; stopping returns to its beginning. Space toggles playback from the
 instrument background or note editor. Playback continues across application tabs,
-loop changes, note edits, and output changes; a play/stop control remains available
-outside the editor. Playback and editor audition do not record themselves. Backgrounding
+loop changes, note edits, and output changes; Space also works from the instrument background outside the editor. Playback and editor audition do not record themselves. Backgrounding
 the page stops playback and releases notes. Avoid routing a MIDI output back to
 the selected input, since external feedback is indistinguishable from live input.
 
-One download button saves selected notes first, otherwise the explicit loop,
-otherwise the whole buffer as a standard `.mid` file. Selected notes retain full
-durations and gaps, rebased to their earliest start; loop exports clip notes at
-both boundaries and preserve the exact range, including silence. MIDI files use a fixed encoding tempo
-of 60 BPM with millisecond ticks; the editor remains meterless. **Clear buffer**
-requires confirmation and starts fresh. Clearing cannot be undone; held live
-notes continue as fresh recordings.
+The Buffer toolbar provides Play loop, Stop, Clear buffer (with confirmation), Download, and Fit. Download saves selected notes first, otherwise the loop range, otherwise the entire buffer as MIDI. Fit trims unused trailing duration and frames the loop or buffer. The shared Output controls remain below both views. Audio parameters use two rows of four; Midi ports stack IN above OUT. Numeric fields support direct entry and keyboard adjustment without visible spinner arrows. Active notes, including buffer playback, highlight the computer keyboard.

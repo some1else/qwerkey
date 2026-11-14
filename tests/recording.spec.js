@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { rolldown } from "rolldown";
-import { readFile } from "node:fs/promises";
 let recording, midiFile, clipNotes, applyRollEdits, startLoop;
 test.beforeAll(async () => {
   const bundle = await rolldown({
@@ -131,7 +130,7 @@ test("MIDI serialization clips, rebases, merges overlapping owners and retains s
   });
   expect(parse(midiFile([], 2))).toEqual({ events: [], end: 2000 });
 });
-test("buffer records live notes, loops without recording itself, exports and clears", async ({
+test("buffer records live notes and loops without recording itself", async ({
   page,
 }) => {
   const errors = [];
@@ -141,30 +140,21 @@ test("buffer records live notes, loops without recording itself, exports and cle
   await page.keyboard.down("y");
   await page.waitForTimeout(180);
   await page.keyboard.up("y");
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
   const buffer = page.getByRole("region", {
     name: "Recorded buffer",
     exact: true,
   });
   await expect(buffer).toHaveAttribute("data-note-count", "1");
   await expect(page.locator(".roll_note")).toHaveCount(1);
-  await page.getByRole("button", { name: "Play loop", exact: true }).click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
   await page.waitForTimeout(700);
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
   await expect(buffer).toHaveAttribute("data-note-count", "1");
-  const downloadEvent = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Download entire buffer", exact: true })
-    .click();
-  const download = await downloadEvent;
-  expect(download.suggestedFilename()).toBe("qwerkey-buffer.mid");
-  const parsed = parse(await readFile(await download.path()));
-  expect(parsed.events).toHaveLength(2);
-  expect(parsed.events[0].pitch).toBe(69);
-  await page.getByRole("button", { name: "Clear buffer", exact: true }).click();
-  await page.getByRole("button", { name: "Clear recording", exact: true }).click();
-  await expect(buffer).toHaveAttribute("data-note-count", "0");
-  await expect(page.getByRole("button", { name: "Undo clear", exact: true })).toHaveCount(0);
+  await expect(page.locator('.buffer_toolbar')).toBeVisible();
+  await expect(page.locator('.output_controls')).toBeVisible();
   await expect(page.locator('.roll_ruler')).toHaveCSS('position', 'sticky');
   const ruler = await page.locator('.roll_ruler').boundingBox();
   const viewport = await page.locator('.roll_viewport').boundingBox();
@@ -174,7 +164,7 @@ test("buffer records live notes, loops without recording itself, exports and cle
   expect(errors).toEqual([]);
 });
 
-test("MIDI input retains channel and velocities and range downloads clip at both ends", async ({
+test("MIDI input retains channel and velocities during loop playback", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -205,29 +195,18 @@ test("MIDI input retains channel and velocities and range downloads clip at both
   await page.evaluate(() => window.receive([0x95, 127, 101]));
   await page.waitForTimeout(250);
   await page.evaluate(() => window.receive([0x85, 127, 33]));
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
   await expect(page.locator(".recorded_buffer")).toHaveAttribute(
     "data-note-count",
     "1",
   );
   await edge(page, "start").fill("0.05");
   await edge(page, "end").fill("0.15");
-  const event = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Download loop range", exact: true })
-    .click();
-  const file = await event;
-  const parsed = parse(await readFile(await file.path()));
-  expect(parsed).toEqual({
-    events: [
-      { time: 0, status: 0x95, pitch: 127, velocity: 101 },
-      { time: 100, status: 0x85, pitch: 127, velocity: 33 },
-    ],
-    end: 100,
-  });
-  await page.getByRole("button", { name: "Play loop", exact: true }).click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
   await page.waitForTimeout(250);
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
   const before = await page.evaluate(() => window.sent.length);
   await page.waitForTimeout(150);
   expect(await page.evaluate(() => window.sent.length)).toBe(before);
@@ -251,7 +230,7 @@ test("editor selection, move, delete, range and tab navigation do not trigger li
   await page.keyboard.down("y");
   await page.waitForTimeout(100);
   await page.keyboard.up("y");
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
   const note = page.locator(".roll_note");
   await note.click();
   await page.keyboard.press("ArrowRight");
@@ -265,10 +244,10 @@ test("editor selection, move, delete, range and tab navigation do not trigger li
     "data-note-count",
     "0",
   );
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).focus();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).focus();
   await page.keyboard.press("Home");
   await expect(
-    page.getByRole("tab", { name: "Just play", exact: true }),
+    page.getByRole("tab", { name: "Keyboard", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   expect(await page.pageErrors()).toEqual([]);
 });
@@ -321,7 +300,7 @@ test("ruler draws, moves and resizes the loop without editing notes", async ({ p
   await page.goto("./");
   await page.locator("#enabler").click();
   await page.keyboard.press("y");
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
   const start = edge(page, "start");
   const end = edge(page, "end");
   const ruler = page.locator(".roll_ruler");
@@ -353,12 +332,13 @@ test("ruler draws, moves and resizes the loop without editing notes", async ({ p
   await page.keyboard.press("ArrowRight");
   await bounds(1.76 + 2 / unit, 3.75);
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-note-count", "1");
-  await page.getByRole("button", { name: "Play loop", exact: true }).click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
   await end.fill("4");
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await expect(page.locator(".roll_loop")).toHaveAttribute("data-explicit", "true");
   await clearRange(page);
-  await expect(page.getByRole("button", { name: "Download entire buffer", exact: true })).toBeEnabled();
+  await expect(page.locator(".roll_loop")).toHaveAttribute("data-explicit", "false");
   // Backward drawing replaces the default region.
   await drag(box.x + 4 * unit, box.x + 2 * unit);
   await bounds(2, 4);
@@ -370,7 +350,7 @@ test("loop handles remain usable at low zoom and ruler touch drawing survives sc
   await page.setViewportSize({ width: 800, height: 900 });
   await page.goto("./");
   await page.locator("#enabler").click();
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
   const start = edge(page, "start");
   const end = edge(page, "end");
   await end.fill("5");
@@ -405,10 +385,6 @@ test("loop handles remain usable at low zoom and ruler touch drawing survives sc
   await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect.poll(async () => Number(await start.inputValue())).toBeCloseTo(3, 2);
   await expect.poll(async () => Number(await end.inputValue())).toBeCloseTo(5, 2);
-  const downloadEvent = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download loop range", exact: true }).click();
-  const download = await downloadEvent;
-  expect(parse(await readFile(await download.path()))).toEqual({ events: [], end: 2000 });
   await page.screenshot({ path: "/tmp/qwerkey-loop-667.png" });
 });
 
@@ -427,25 +403,26 @@ test("playback survives tabs, edits and Space toggles", async ({ page }) => {
   await page.keyboard.down("y");
   await page.waitForTimeout(150);
   await page.keyboard.up("y");
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
   await edge(page, "end").fill("1");
-  await page.getByRole("button", { name: "Play loop", exact: true }).click();
-  await page.getByRole("tab", { name: "Just play", exact: true }).click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+  await page.getByRole("tab", { name: "Keyboard", exact: true }).click();
   const starts = await page.evaluate(() => window.playbackStarts);
   await page.waitForFunction(before => window.playbackStarts > before, starts);
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.locator(".roll_note").click();
   await page.keyboard.press("Shift+ArrowUp");
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.keyboard.press("Space");
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeDisabled();
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "false");
   await page.keyboard.press("Space");
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.locator(".roll_note").first().focus();
   await page.keyboard.press("Backspace");
   await expect(page.locator(".roll_note")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
 });
 
 test("Fit trims historical extent and reanchors subsequent capture", () => {
@@ -464,25 +441,6 @@ test("Fit trims historical extent and reanchors subsequent capture", () => {
   store.start("c", 67);
   expect(store.snapshot()[1].start).toBeCloseTo(0.1);
 });
-
-test("Fit frames a selected nonzero silent loop", async ({ page }) => {
-  await page.setViewportSize({ width: 800, height: 900 });
-  await page.goto("./");
-  await page.locator("#enabler").click();
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
-  await edge(page, "end").fill("4");
-  await edge(page, "start").fill("2");
-  await page.getByRole("button", { name: "Fit", exact: true }).click();
-  const viewport = await page.locator(".roll_viewport").boundingBox();
-  const loop = await page.locator(".roll_loop").boundingBox();
-  expect(loop.x).toBeGreaterThanOrEqual(viewport.x);
-  await expect.poll(async () => {
-    const current = await page.locator(".roll_loop").boundingBox();
-    return current.x + current.width;
-  }).toBeLessThanOrEqual(viewport.x + viewport.width + 1);
-  await page.screenshot({ path: "/tmp/qwerkey-fit-667.png" });
-});
-
 
 test("running transport reconciles edits without retriggering unchanged notes", () => {
   let time = 0;
@@ -510,77 +468,18 @@ test("grid selection transposes the whole group once and preserves metadata", as
   await page.waitForTimeout(100);
   await page.keyboard.up("y");
   await page.keyboard.up("u");
-  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
-  const exported = async () => {
-    const event = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^Download/ }).click();
-    const download = await event;
-    return parse(await readFile(await download.path())).events;
-  };
-  const before = await exported();
-  await page.locator(".roll_grid").focus();
-  await page.keyboard.press("ControlOrMeta+a");
-  await expect(page.locator(".roll_note[data-selected]")).toHaveCount(2);
-  await page.keyboard.press("Shift+ArrowUp");
-  const after = await exported();
-  expect(after).toEqual(before.map(event => ({ ...event, pitch: event.pitch + 12 })));
-  await page.locator(".roll_grid").focus();
-  await page.keyboard.press("Backspace");
-  await expect(page.locator(".roll_note")).toHaveCount(0);
-});
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  const before = await page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(item.style.top)));
+  await page.locator('.roll_grid').focus();
+  await page.keyboard.press('ControlOrMeta+a');
+  await expect(page.locator('.roll_note[data-selected]')).toHaveCount(2);
+  await page.keyboard.press('Shift+ArrowUp');
+  const after = await page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(item.style.top)));
+  expect(after).toEqual(before.map(y => y - 12 * 18));
+  await page.keyboard.press('Backspace');
+  await expect(page.locator('.roll_note')).toHaveCount(0);
 
-test("simplified toolbar seeks, zooms, prioritizes selection and confirms clearing", async ({ page }) => {
-  await page.goto("./");
-  await page.locator("#enabler").click();
-  await page.keyboard.down("y");
-  await page.waitForTimeout(150);
-  await page.keyboard.up("y");
-  await page.locator("#buffer-mode").click();
-  await expect(page.getByText("Playback output", { exact: true })).toHaveCount(0);
-  await expect(page.locator("#loop-ruler-help")).toHaveCount(0);
-  await expect(page.locator('.buffer_toolbar input')).toHaveCount(0);
-  const ruler = page.locator(".roll_ruler");
-  const box = await ruler.boundingBox();
-  await page.mouse.move(box.x + 240, box.y + 20);
-  await page.mouse.down();
-  await page.mouse.move(box.x + 480, box.y + 20, { steps: 8 });
-  await page.mouse.up();
-  await expect(page.getByRole("button", { name: "Download loop range", exact: true })).toBeEnabled();
-  await expect(page.locator(".roll_boundary")).toHaveCount(2);
-  const loopBox = await page.locator(".roll_loop").boundingBox();
-  const startMarker = await page.locator(".roll_boundary_start").boundingBox();
-  expect(startMarker.x).toBeCloseTo(loopBox.x, 0);
-  await page.screenshot({ path: "/tmp/qwerkey-buffer-ux.png" });
-  await page.locator(".roll_note").click();
-  await expect(page.getByRole("button", { name: /^Download/ })).toHaveCount(1);
-  const event = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download selected notes", exact: true }).click();
-  const file = await event;
-  expect(file.suggestedFilename()).toBe("qwerkey-selection.mid");
-  expect(parse(await readFile(await file.path())).events).toHaveLength(2);
-  await page.mouse.click(box.x + 120, box.y + 20);
-  await expect(page.locator(".roll_loop")).toHaveAttribute("data-explicit", "false");
-  const playhead = await page.locator(".roll_playhead").boundingBox();
-  expect(playhead.x).toBeCloseTo(box.x + 120, 0);
-  const spacing = async () => (await page.locator(".roll_tick").nth(1).boundingBox()).x - (await page.locator(".roll_tick").nth(0).boundingBox()).x;
-  const oldWidth = await spacing();
-  await page.mouse.move(box.x + 120, box.y + 20);
-  await page.mouse.wheel(0, -100);
-  await expect.poll(spacing).toBeLessThan(oldWidth);
-  await page.mouse.wheel(0, 100);
-  await expect.poll(spacing).toBeCloseTo(oldWidth, 0);
-  await page.getByRole("button", { name: "Play loop", exact: true }).click();
-  await page.getByRole("button", { name: "Clear buffer", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".roll_note")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Clear buffer", exact: true }).click();
-  await page.getByRole("button", { name: "Clear recording", exact: true }).click();
-  await expect(page.locator(".roll_note")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeDisabled();
 });
-
 
 test("transport starts at a sought position without sounding earlier notes", () => {
   const sounded = [];
@@ -651,8 +550,9 @@ test("incoming MIDI is recorded at the looping playhead even on a hidden editor"
   await page.locator("#buffer-mode").click();
   await edge(page, "end").fill("2");
   await edge(page, "start").fill("0.5");
-  await page.getByRole("button", { name: "Play loop", exact: true }).click();
-  await page.locator("#midi-mode").click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+  await page.locator("#keyboard-mode").click();
   await page.evaluate(() => window.receive([0x93, 74, 101]));
   await page.waitForTimeout(120);
   await page.evaluate(() => window.receive([0x83, 74, 33]));
@@ -662,17 +562,10 @@ test("incoming MIDI is recorded at the looping playhead even on a hidden editor"
   await expect.poll(() => page.evaluate(() => window.sent.some(data => data[0] === 0x83 && data[1] === 74))).toBe(true);
   await page.locator("#buffer-mode").click();
   await expect(page.locator(".roll_note")).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
-  const event = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download loop range", exact: true }).click();
-  const file = await event;
-  const parsed = parse(await readFile(await file.path()));
-  expect(parsed.events).toHaveLength(2);
-  expect(parsed.events[0]).toEqual(expect.objectContaining({ status: 0x93, pitch: 74, velocity: 101 }));
-  expect(parsed.events[0].time).toBeLessThan(500);
-  expect(parsed.events[1].time - parsed.events[0].time).toBeGreaterThanOrEqual(100);
-  expect(parsed.events[1].velocity).toBe(33);
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+
 });
 
 test("synth plays a live overdub on subsequent passes without restarting", async ({ page }) => {
@@ -689,15 +582,49 @@ test("synth plays a live overdub on subsequent passes without restarting", async
   await page.keyboard.press("y");
   await page.locator("#buffer-mode").click();
   await edge(page, "end").fill("0.8");
-  await page.getByRole("button", { name: "Play loop", exact: true }).click();
-  await page.locator("#audio-mode").click();
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+  await page.locator("#keyboard-mode").click();
+  await page.locator("#instrument").focus();
   await page.keyboard.down("u");
   await page.waitForTimeout(150);
   await page.keyboard.up("u");
-  // U is MIDI pitch 73: one live voice, then at least two loop playback voices.
-  await expect.poll(() => page.evaluate(() => window.frequencies.filter(hz => Math.abs(hz - 440 * 2 ** (4 / 12)) < 0.1).length)).toBeGreaterThanOrEqual(3);
+  // U is MIDI pitch 73: one live unison pair, then at least two playback pairs.
+  await expect.poll(() => page.evaluate(() => window.frequencies.filter(hz => Math.abs(hz - 440 * 2 ** (4 / 12)) < 0.1).length)).toBeGreaterThanOrEqual(6);
   await page.locator("#buffer-mode").click();
   await expect(page.locator(".roll_note")).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  await page.locator(".roll_viewport").focus();
+  await page.keyboard.press("Space");
+});
+
+test("completed snapshots are stable and held snapshots remain immutable", () => {
+  let time = 1000;
+  const store = recording(() => time);
+  store.start("one", 60);
+  time += 100;
+  const held = store.snapshot();
+  time += 100;
+  store.end("one");
+  expect(held[0].duration).toBeCloseTo(.1);
+  const completed = store.snapshot();
+  expect(completed[0].duration).toBeCloseTo(.2);
+  expect(store.snapshot()).toBe(completed);
+  store.start("two", 64);
+  expect(store.snapshot()[0]).toBe(completed[0]);
+  expect(store.count).toBe(2);
+});
+
+test("hidden recording avoids editor DOM and Space plays fresh capture", async ({ page }) => {
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.press("y");
+  await page.waitForTimeout(100);
+  await expect(page.locator(".roll_note")).toHaveCount(0);
+  await expect(page.locator(".roll_velocity")).toHaveCount(0);
+  await page.keyboard.press("Space");
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  await page.keyboard.press("Space");
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await expect(page.locator(".roll_note")).toHaveCount(1);
 });

@@ -60,9 +60,9 @@ test('resumes real audio and plays once per held key', async ({ page }) => {
   await expect(page.locator('.overlay')).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.audioState)).toBe('running');
   await page.keyboard.down('y');
-  await expect.poll(() => page.evaluate(() => window.audioCalls.starts)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.audioCalls.starts)).toBe(2);
   await page.keyboard.down('y');
-  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(1);
+  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(2);
   const stopsBeforeRelease = await page.evaluate(() => window.audioCalls.stops);
   await page.keyboard.up('y');
   await expect.poll(() => page.evaluate(() => window.audioCalls.stops)).toBeGreaterThan(stopsBeforeRelease);
@@ -83,12 +83,12 @@ test('releases and cleans up old voices while a retrigger keeps playing', async 
   await page.keyboard.down('y');
   await page.keyboard.up('y');
   await page.keyboard.down('y');
-  await expect.poll(() => page.evaluate(() => window.oscillators.length)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.oscillators.length)).toBe(4);
   // The old voice finishes while the retriggered voice sustains.
-  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(2);
   await expect(page.locator('.computer_keys .key_6_3')).toHaveClass(/key_active/);
   await page.keyboard.up('y');
-  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.endedOscillators)).toBe(4);
 });
 
 test('clears the release highlight after three seconds', async ({ page }) => {

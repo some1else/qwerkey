@@ -44,14 +44,14 @@ test('Strict Mode remount cleans audio and input listeners', async ({ page }) =>
   });
   await page.locator('#enabler').click();
   await page.keyboard.down('y');
-  await expect.poll(() => page.evaluate(() => window.starts)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.starts)).toBe(2);
   await page.evaluate(() => window.unmount());
   await expect.poll(() => page.evaluate(() => window.closes)).toBe(1);
   await page.keyboard.up('y');
   await page.evaluate(() => window.mount());
   await page.locator('#enabler').click();
   await page.keyboard.down('y');
-  await expect.poll(() => page.evaluate(() => window.starts)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.starts)).toBe(4);
   await page.keyboard.up('y');
   await expect(page.locator('.key_active')).toHaveCount(0);
   await page.evaluate(() => window.unmount());

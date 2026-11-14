@@ -22,7 +22,8 @@ for (const sampleRate of [44100, 48000]) {
     await page.goto('./');
     await page.locator('#enabler').click();
     await expect(page.locator('.overlay')).toBeHidden();
-    await page.locator('#voices').fill('64');
+    await page.locator('#voices input').focus();
+    await page.keyboard.press('End');
     await page.locator('.piano_keys').evaluate(element => { element.setPointerCapture = () => {}; });
     await page.locator('.piano_keys .key').evaluateAll(keys => {
       keys.forEach((key, index) => {
@@ -86,7 +87,7 @@ for (const sampleRate of [44100, 48000]) {
     expect(result.graph.makeupGain).toBeCloseTo(1.6, 5);
     delete result.graph.makeupGain;
     expect(result.graph).toEqual({
-      contextOptions: { sampleRate: 192000 },
+      contextOptions: { latencyHint: 'interactive' },
       outputs: 1,
       stages: ['GainNode', 'DynamicsCompressorNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
       mixerGain: 1,
@@ -99,6 +100,44 @@ for (const sampleRate of [44100, 48000]) {
     expect(result.peak).toBeLessThanOrEqual(10 ** (-1 / 20) + 1e-6);
     expect(result.peak).toBeCloseTo(10 ** (-1 / 20), 5);
     expect(result.minimum).toBeCloseTo(-(10 ** (-1 / 20)), 5);
+    expect(await page.pageErrors()).toEqual([]);
+  });
+}
+
+for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
+  test(`pans root note ${pitch} to the ${side} in rendered audio`, async ({ page }) => {
+    await page.addInitScript(() => {
+      window.AudioContext = function () {
+        const context = new OfflineAudioContext(2, 48000, 48000);
+        Object.defineProperty(context, 'state', { get: () => 'running' });
+        context.resume = async () => {};
+        window.renderContext = context;
+        return context;
+      };
+    });
+    await page.goto('./');
+    await page.locator('#enabler').click();
+    await page.locator('.piano_keys').evaluate(element => { element.setPointerCapture = () => {}; });
+    const key = page.locator(`.piano_keys .key_${pitch}`);
+    const box = await key.boundingBox();
+    await key.dispatchEvent('pointerdown', {
+      button: 0, pointerId: pitch,
+      clientX: box.x + box.width / 2, clientY: box.y + box.height * .85,
+    });
+    const energies = await page.evaluate(async () => {
+      const buffer = await window.renderContext.startRendering();
+      return [0, 1].map(channel => buffer.getChannelData(channel).reduce((sum, sample) => sum + sample * sample, 0));
+    });
+    if (side === 'left') {
+      expect(energies[0]).toBeGreaterThan(1);
+      expect(energies[1]).toBeLessThan(energies[0] * 1e-6);
+    } else if (side === 'right') {
+      expect(energies[1]).toBeGreaterThan(1);
+      expect(energies[0]).toBeLessThan(energies[1] * 1e-6);
+    } else {
+      expect(energies[0]).toBeGreaterThan(1);
+      expect(energies[1] / energies[0]).toBeCloseTo(Math.tan(((pitch - 68.5) / 27.5 + 1) * Math.PI / 4) ** 2, 2);
+    }
     expect(await page.pageErrors()).toEqual([]);
   });
 }
