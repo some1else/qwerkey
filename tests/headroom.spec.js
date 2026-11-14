@@ -12,6 +12,59 @@ test.beforeAll(async () => {
   }
 });
 
+test('adds a quiet stereo hall tail after the dry sound', async ({ page }) => {
+  await page.addScriptTag({ content: harness });
+  const results = await page.evaluate(async () => {
+    const NativeAudioContext = window.AudioContext;
+    const nativeConnect = AudioNode.prototype.connect;
+    const results = [];
+    try {
+      for (const enabled of [false, true]) {
+        const context = new OfflineAudioContext(2, 48000 * 3, 48000);
+        Object.defineProperty(context, 'state', { get: () => 'running' });
+        context.resume = async () => {};
+        window.AudioContext = function () { return context; };
+        const edges = [];
+        AudioNode.prototype.connect = function (destination, ...args) {
+          edges.push([this, destination]);
+          return nativeConnect.call(this, destination, ...args);
+        };
+        await audioHarness.createSynth().enable();
+        AudioNode.prototype.connect = nativeConnect;
+        const hall = edges.find(([from]) => from instanceof ConvolverNode)[0];
+        if (!enabled) hall.disconnect();
+        const ceiling = edges.find(([, to]) => to === context.destination)[0];
+        const clip = edges.find(([, to]) => to === ceiling)[0];
+        const limiter = edges.find(([, to]) => to === clip)[0];
+        const master = edges.find(([, to]) => to === limiter)[0];
+        const source = context.createBufferSource();
+        source.buffer = context.createBuffer(2, 4800, 48000);
+        for (let i = 0; i < 4800; i++) {
+          source.buffer.getChannelData(0)[i] = 0.2 * Math.sin(2 * Math.PI * 440 * i / 48000);
+        }
+        source.connect(master);
+        source.start(0.05);
+        const buffer = await context.startRendering();
+        const energy = (start, end) => [0, 1].map(channel =>
+          buffer.getChannelData(channel).slice(start * 48000, end * 48000)
+            .reduce((sum, sample) => sum + sample * sample, 0));
+        results.push({ direct: energy(0, 0.2), tail: energy(0.3, 1.3), late: energy(2, 3) });
+      }
+    } finally {
+      window.AudioContext = NativeAudioContext;
+      AudioNode.prototype.connect = nativeConnect;
+    }
+    return results;
+  });
+  const [dry, wet] = results;
+  for (const channel of [0, 1]) {
+    expect(dry.tail[channel]).toBeLessThan(1e-10);
+    expect(wet.tail[channel]).toBeGreaterThan(1e-6);
+    expect(wet.tail[channel]).toBeLessThan(wet.direct[0] * 0.05);
+    expect(wet.late[channel]).toBeLessThan(wet.tail[channel] * 0.01);
+  }
+});
+
 for (const sampleRate of [44100, 48000]) {
   test(`measures six-voice submix and output headroom at ${sampleRate} Hz`, async ({ page }, testInfo) => {
     await page.addScriptTag({ content: harness });

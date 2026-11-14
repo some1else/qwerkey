@@ -2,7 +2,10 @@
 
 The audio path is voice envelopes/panners → submix → bus compressor → master
 makeup → limiter → soft clip → sample ceiling → destination. The AudioContext
-uses `latencyHint: 'interactive'` and the device sample rate. The compressor and
+uses `latencyHint: 'interactive'` and the device sample rate. A parallel hall
+send branches from master makeup, filters to 180–4500 Hz, and returns through
+the limiter at gain 0.1. Its stereo impulse lasts 2.4 seconds with 20 ms predelay;
+the dry signal has no added reverb delay. The compressor and
 latency hint were already configured; this change adds submix headroom and
 repeatable measurements.
 
@@ -19,7 +22,7 @@ at 44.1 and 48 kHz. Each three-second render captures stereo sample peaks at
 the submix, master makeup, and final output. All six voices use MIDI velocity
 127. Each scenario runs all four waveforms; the table reports the highest peak
 across waveforms and both sample rates. These baseline figures precede the
-upper-register attenuation: notes above A4 now fall by 3 dB per octave, capped
+hall return and upper-register attenuation: notes above A4 now fall by 3 dB per octave, capped
 at 12 dB. The regression test also checks that the high-note submix remains
 quieter than the low-note submix for every waveform.
 

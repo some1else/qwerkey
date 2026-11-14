@@ -50,6 +50,24 @@ function softClipCurve(peak: number): Float32Array<ArrayBuffer> {
   return curve;
 }
 
+function createHallImpulse(context: AudioContext): AudioBuffer {
+  const duration = 2.4;
+  const preDelay = 0.02;
+  const impulse = context.createBuffer(2, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  // Independent, repeatable stereo diffusion; no external impulse download.
+  let seed = 12345;
+  for (let channel = 0; channel < 2; channel++) {
+    const samples = impulse.getChannelData(channel);
+    for (let i = Math.ceil(preDelay * context.sampleRate); i < samples.length; i++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      const time = i / context.sampleRate - preDelay;
+      const fadeIn = Math.min(1, time / 0.03);
+      samples[i] = (seed / 2 ** 31 - 1) * fadeIn * Math.exp(-6.9 * time / (duration - preDelay));
+    }
+  }
+  return impulse;
+}
+
 function createMixer(context: AudioContext): GainNode {
   const mixer = context.createGain();
   mixer.gain.value = submixGain;
@@ -89,6 +107,29 @@ function createMixer(context: AudioContext): GainNode {
   mixer.connect(compressor);
   compressor.connect(makeup);
   makeup.connect(limiter);
+  // A quiet, dark hall return alongside the dry master. Both paths pass
+  // through the output protection, and the dry attack stays immediate.
+  const reverbHighpass = context.createBiquadFilter();
+  // Feed a mono room send into the stereo impulse so even hard-panned notes
+  // excite both sides of the hall.
+  reverbHighpass.channelCount = 1;
+  reverbHighpass.channelCountMode = 'explicit';
+  reverbHighpass.type = 'highpass';
+  reverbHighpass.frequency.value = 180;
+  reverbHighpass.Q.value = 0.7;
+  const reverbLowpass = context.createBiquadFilter();
+  reverbLowpass.type = 'lowpass';
+  reverbLowpass.frequency.value = 4500;
+  reverbLowpass.Q.value = 0.7;
+  const hall = context.createConvolver();
+  hall.buffer = createHallImpulse(context);
+  const wet = context.createGain();
+  wet.gain.value = 0.1;
+  makeup.connect(reverbHighpass);
+  reverbHighpass.connect(reverbLowpass);
+  reverbLowpass.connect(hall);
+  hall.connect(wet);
+  wet.connect(limiter);
   limiter.connect(softClip);
   softClip.connect(ceiling);
   ceiling.connect(context.destination);

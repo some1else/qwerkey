@@ -40,7 +40,7 @@ async function openSynth(page) {
     };
     const connect = AudioNode.prototype.connect;
     AudioNode.prototype.connect = function (destination, ...args) {
-      if (this instanceof BiquadFilterNode) {
+      if (this instanceof BiquadFilterNode && destination instanceof GainNode) {
         window.filters.push(this);
         window.voiceGain = destination.gain;
       }

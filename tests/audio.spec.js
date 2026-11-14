@@ -112,6 +112,11 @@ for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
         Object.defineProperty(context, 'state', { get: () => 'running' });
         context.resume = async () => {};
         window.renderContext = context;
+        const createConvolver = context.createConvolver.bind(context);
+        context.createConvolver = () => {
+          window.hall = createConvolver();
+          return window.hall;
+        };
         return context;
       };
     });
@@ -125,6 +130,8 @@ for (const [pitch, side] of [[41, 'left'], [69, 'center'], [96, 'right']]) {
       clientX: box.x + box.width / 2, clientY: box.y + box.height * .85,
     });
     const energies = await page.evaluate(async () => {
+      // Measure the direct voice pan independently of stereo room diffusion.
+      window.hall.disconnect();
       const buffer = await window.renderContext.startRendering();
       return [0, 1].map(channel => buffer.getChannelData(channel).reduce((sum, sample) => sum + sample * sample, 0));
     });
