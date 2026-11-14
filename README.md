@@ -57,8 +57,7 @@ mode changes for the current page session.
 
 Each audio voice peaks at 1/12 so twelve simultaneous voices reach 0 dBFS at a
 unity-gain mixer. The mixer feeds a compressor, +4 dB makeup gain, and a fast
-limiter. The audio context runs at 192 kHz where supported, oversampling the
-whole chain, and a 4× oversampled soft clip rounds off limiter overshoots. A
+limiter. The audio context uses the output device’s preferred sample rate. A 4× oversampled soft clip rounds off limiter overshoots. A
 final safety ceiling bounds output samples to -1 dBFS, including transients and
 dense chords.
 

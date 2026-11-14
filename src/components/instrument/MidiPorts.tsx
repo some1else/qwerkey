@@ -1,5 +1,6 @@
+import { memo } from 'react';
 import type { Controller, Snapshot } from '../../instrument/controller';
-export default function MidiPorts({ state, controller }: {state: Snapshot; controller: Controller | null}) {
+function MidiPorts({ state, controller }: {state: Snapshot; controller: Controller | null}) {
   return <div className="midi_ports" hidden={state.mode !== 'midi'}>{(['input', 'output'] as const).map(direction => {
     const ports = direction === 'input' ? state.ports.inputs : state.ports.outputs;
     const selected = direction === 'input' ? state.ports.inputId : state.ports.outputId;
@@ -9,3 +10,5 @@ export default function MidiPorts({ state, controller }: {state: Snapshot; contr
       </select></span></div>;
   })}</div>;
 }
+
+export default memo(MidiPorts, (a, b) => a.controller === b.controller && a.state.mode === b.state.mode && a.state.ports === b.state.ports);

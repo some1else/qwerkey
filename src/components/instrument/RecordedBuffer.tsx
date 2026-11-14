@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { PianoRoll } from "@audio-ui/react/piano-roll";
 import { Timeline } from "@audio-ui/react/timeline";
 import type { Controller } from "../../instrument/controller";
@@ -14,7 +14,7 @@ const MIN_RANGE_LENGTH = 0.001;
 const KEYBOARD_STEP = 0.01;
 const describeSeconds = (value: number) => `${Number(value.toFixed(3))} seconds`;
 
-export default function RecordedBuffer({
+function RecordedBuffer({
   controller,
   visible,
 }: {
@@ -33,7 +33,31 @@ export default function RecordedBuffer({
   const gesture = useRef<{ id: number; x: number; time: number; moved: boolean } | null>(null);
   const body = useRef<HTMLDivElement>(null);
   const keys = useRef<HTMLDivElement>(null);
+  const playhead = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ left: 0, width: 1200 });
+  useEffect(() => {
+    if (!visible || !body.current) return;
+    const element = body.current;
+    const measure = () => setViewport({ left: element.scrollLeft, width: element.clientWidth });
+    const observer = new ResizeObserver(measure);
+    observer.observe(element); measure();
+    return () => observer.disconnect();
+  }, [visible]);
+  useEffect(() => {
+    if (!visible) return;
+    let frame = 0;
+    const draw = () => {
+      if (playhead.current) playhead.current.style.left = `${positionRef.current * zoom}px`;
+      frame = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(frame);
+  }, [visible, zoom]);
   const centered = useRef(false);
+  const scroll = useRef({ left: 0, top: 0 });
+  useEffect(() => {
+    if (visible && body.current) { body.current.scrollLeft = scroll.current.left; body.current.scrollTop = scroll.current.top; }
+  }, [visible]);
   const generation = useRef(0);
   const loop = useRef<ReturnType<typeof startLoop> | null>(null);
   const boundsRef = useRef<[number, number]>([0, 0.001]);
@@ -47,15 +71,16 @@ export default function RecordedBuffer({
   const extent = Math.max(
     0.001,
     controller?.recording.extent() ?? 0,
-    ...notes.map((n) => n.start + n.duration),
+    notes.reduce((end, n) => Math.max(end, n.start + n.duration), 0),
   );
   const effectiveRange: [number, number] = range ?? [0, extent];
   const duration = Math.max(timelineEnd, extent + 1, range?.[1] ?? 0);
   function refresh() {
     const snapshot = controller?.recording.snapshot() ?? [];
     if (loop.current) updatePlayback(rangeRef.current, snapshot);
-    else setNotes(snapshot);
+    else if (visibleRef.current) setNotes(snapshot);
   }
+  useEffect(() => { if (visible) refresh(); }, [visible]);
   useEffect(() => {
     refresh();
     setZoom(
@@ -64,9 +89,12 @@ export default function RecordedBuffer({
     let revision = -1;
     const timer = setInterval(() => {
       const store = controller?.recording;
-      if (store && (store.revision !== revision || ((visibleRef.current || loop.current) && store.pendingIds().size))) {
+      if (!store || (!visibleRef.current && !loop.current)) return;
+      if (store.revision !== revision) {
         revision = store.revision;
         refresh();
+      } else if (visibleRef.current && store.pendingIds().size) {
+        setNotes(store.snapshot());
       }
     }, 50);
     const stop = () => {
@@ -92,7 +120,7 @@ export default function RecordedBuffer({
     if (!centered.current && notes.length && body.current) {
       body.current.scrollTop = Math.max(
         0,
-        (Math.max(96, ...notes.map((n) => n.pitch)) - notes[0]!.pitch) * 18 -
+        (notes.reduce((end, n) => Math.max(end, n.pitch), 96) - notes[0]!.pitch) * 18 -
           180,
       );
       centered.current = true;
@@ -103,7 +131,7 @@ export default function RecordedBuffer({
     stopRef.current();
   }
   function updatePlayback(nextRange = rangeRef.current, snapshot = controller?.recording.snapshot() ?? [], requestedPosition?: number) {
-    setNotes(snapshot);
+    if (visibleRef.current) setNotes(snapshot);
     const end = Math.max(0.001, controller?.recording.extent() ?? 0);
     const bounds: [number, number] = nextRange ?? [0, end];
     const current = requestedPosition ?? (loop.current ? boundsRef.current[0] + loop.current.position() : positionRef.current);
@@ -111,7 +139,7 @@ export default function RecordedBuffer({
     boundsRef.current = bounds;
     positionRef.current = absolute;
     if (loop.current) loop.current.update(clipNotes(snapshot, ...bounds), bounds[1] - bounds[0], absolute - bounds[0]);
-    setPosition(loop.current ? absolute : bounds[0]);
+    if (visibleRef.current) setPosition(loop.current ? absolute : bounds[0]);
   }
   function applyEdits(next: RecordedNote[]) {
     controller?.recording.replace(next);
@@ -131,7 +159,7 @@ export default function RecordedBuffer({
       Math.max(
         0.001,
         controller.recording.extent(),
-        ...snapshot.map((n) => n.start + n.duration),
+        snapshot.reduce((end, n) => Math.max(end, n.start + n.duration), 0),
       ),
     ];
     const clipped = clipNotes(snapshot, bounds[0], bounds[1]);
@@ -147,7 +175,6 @@ export default function RecordedBuffer({
       off: (n) => controller.release(`playback:${n.id}`),
       position: (time) => {
         positionRef.current = boundsRef.current[0] + time;
-        if (visibleRef.current) setPosition(positionRef.current);
       },
     });
     loop.current = cancel;
@@ -172,8 +199,8 @@ export default function RecordedBuffer({
     const all = controller?.recording.snapshot() ?? [];
     const selected = all.filter(note => selection.includes(note.id));
     const bounds: [number, number] = selected.length
-      ? [Math.min(...selected.map(note => note.start)), Math.max(...selected.map(note => note.start + note.duration))]
-      : range ?? [0, Math.max(0.001, controller?.recording.extent() ?? 0, ...all.map(note => note.start + note.duration))];
+      ? [selected.reduce((start, n) => Math.min(start, n.start), Infinity), selected.reduce((end, n) => Math.max(end, n.start + n.duration), 0)]
+      : range ?? [0, Math.max(0.001, controller?.recording.extent() ?? 0, all.reduce((end, n) => Math.max(end, n.start + n.duration), 0))];
     const bytes = midiFile(clipNotes(selected.length ? selected : all, ...bounds), bounds[1] - bounds[0]);
     const url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
     const anchor = document.createElement("a");
@@ -206,7 +233,7 @@ export default function RecordedBuffer({
     };
     element.addEventListener("wheel", wheel, { passive: false, capture: true });
     return () => element.removeEventListener("wheel", wheel, true);
-  }, [zoom]);
+  }, [zoom, visible]);
   function changeRange(next: readonly [number, number]) {
     if (
       next.every(Number.isFinite) &&
@@ -227,7 +254,7 @@ export default function RecordedBuffer({
     let starting = false;
     const toggle = () => {
       if (actions.current.playing || starting) { actions.current.stop(); starting = false; }
-      else if (actions.current.notes.length) {
+      else if (controller?.recording.count) {
         starting = true;
         void actions.current.play().finally(() => { starting = false; });
       }
@@ -246,7 +273,8 @@ export default function RecordedBuffer({
       window.removeEventListener("qwerkey:toggle-buffer", toggle);
       document.removeEventListener("keydown", keyboard, true);
     };
-  }, []);
+  }, [controller]);
+  const rollNotes = useMemo(() => notes.map(n => ({ id: n.id, pitch: n.pitch, start: n.start, length: n.duration, velocity: n.velocity / 127 })), [notes]);
   const pending = controller?.recording.pendingIds() ?? new Set<string>();
   return (
     <section
@@ -267,10 +295,11 @@ export default function RecordedBuffer({
           return;
         }
         const requested = (event.key === "ArrowUp" ? 1 : -1) * (event.shiftKey ? 12 : 1);
-        const delta = Math.max(-Math.min(...selected.map(n => n.pitch)), Math.min(127 - Math.max(...selected.map(n => n.pitch)), requested));
+        const delta = Math.max(-selected.reduce((pitch, n) => Math.min(pitch, n.pitch), 127), Math.min(127 - selected.reduce((pitch, n) => Math.max(pitch, n.pitch), 0), requested));
         applyEdits(notes.map(n => selected.some(item => item.id === n.id) ? { ...n, pitch: n.pitch + delta } : n));
       }}
     >
+      {visible && <>
       <div className="buffer_toolbar" role="group" aria-label="Buffer actions">
         <div className="buffer_actions" role="group" aria-label="Transport">
           <button onClick={play} disabled={playing || !notes.length}>Play</button>
@@ -308,19 +337,13 @@ export default function RecordedBuffer({
         position={position}
       >
         <PianoRoll.Root
-          minPitch={Math.min(41, ...notes.map((n) => n.pitch))}
-          maxPitch={Math.max(96, ...notes.map((n) => n.pitch))}
+          minPitch={notes.reduce((end, n) => Math.min(end, n.pitch), 41)}
+          maxPitch={notes.reduce((end, n) => Math.max(end, n.pitch), 96)}
           minLength={0.001}
           mode="select"
           selection={selection}
           onSelectionChange={setSelection}
-          value={notes.map((n) => ({
-            id: n.id,
-            pitch: n.pitch,
-            start: n.start,
-            length: n.duration,
-            velocity: n.velocity / 127,
-          }))}
+          value={rollNotes}
           onValueChange={(value) => {
             if (!controller) return;
             const current = controller.recording.snapshot();
@@ -354,6 +377,8 @@ export default function RecordedBuffer({
               className="roll_viewport"
               ref={body}
               onScroll={(event) => {
+                setViewport({ left: event.currentTarget.scrollLeft, width: event.currentTarget.clientWidth });
+                scroll.current = { left: event.currentTarget.scrollLeft, top: event.currentTarget.scrollTop };
                 if (keys.current)
                   keys.current.style.transform = `translateY(${-event.currentTarget.scrollTop}px)`;
               }}
@@ -424,7 +449,7 @@ export default function RecordedBuffer({
                   )}
                 </PianoRoll.Rows>
                 <PianoRoll.Notes>
-                  {(note) => (
+                  {(note) => (selection.includes(note.id) || (note.start * zoom <= viewport.left + viewport.width + 200 && (note.start + note.length) * zoom >= viewport.left - 200)) ? (
                     <PianoRoll.Note
                       className="roll_note"
                       key={note.id}
@@ -433,26 +458,29 @@ export default function RecordedBuffer({
                       <PianoRoll.NoteHandle edge="start" />
                       <PianoRoll.NoteHandle edge="end" />
                     </PianoRoll.Note>
-                  )}
+                  ) : null}
                 </PianoRoll.Notes>
                 <PianoRoll.Marquee className="roll_marquee" />
                 {effectiveRange.map((time, i) => (
                   <Timeline.Mark key={i} value={time} aria-hidden="true" className={`roll_boundary roll_boundary_${i ? "end" : "start"}`} />
                 ))}
-                <Timeline.Playhead className="roll_playhead" />
+                <div ref={playhead} aria-hidden="true" className="roll_playhead" style={{ position: "absolute", left: position * zoom }} />
               </PianoRoll.Grid>
               <PianoRoll.VelocityLane
                 className="roll_velocity"
                 aria-label="Note velocities"
               >
                 <PianoRoll.Notes>
-                  {(note) => <PianoRoll.Velocity key={note.id} note={note} />}
+                  {(note) => (selection.includes(note.id) || (note.start * zoom <= viewport.left + viewport.width + 200 && note.start * zoom >= viewport.left - 200)) ? <PianoRoll.Velocity key={note.id} note={note} /> : null}
                 </PianoRoll.Notes>
               </PianoRoll.VelocityLane>
             </Timeline.Viewport>
           </div>
         </PianoRoll.Root>
       </Timeline.Root>
+      </>}
     </section>
   );
 }
+
+export default memo(RecordedBuffer);

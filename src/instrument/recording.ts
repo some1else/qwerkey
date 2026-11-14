@@ -15,7 +15,10 @@ export function createRecording(clock = () => performance.now()) {
     revision = 0,
     extent = 0;
   let notes: RecordedNote[] = [];
+  let cachedRevision = -1;
+  let cached: RecordedNote[] = [];
   const pending = new Map<string, RecordedNote>();
+  const indices = new Map<string, number>();
   const startedAt = new Map<string, number>();
   let capturePosition: ((timestamp: number) => number) | null = null;
   const now = (timestamp = clock()) =>
@@ -49,6 +52,7 @@ export function createRecording(clock = () => performance.now()) {
       }
       capturePosition = source;
     },
+    get count() { return notes.length; },
     get revision() {
       return revision;
     },
@@ -72,6 +76,7 @@ export function createRecording(clock = () => performance.now()) {
         duration: 0,
         source,
       };
+      indices.set(note.id, notes.length);
       notes.push(note);
       pending.set(key, note);
       startedAt.set(note.id, timestamp);
@@ -80,9 +85,9 @@ export function createRecording(clock = () => performance.now()) {
     end(key: string, velocity = 64, timestamp = clock()) {
       const note = pending.get(key);
       if (!note) return;
-      note.duration = Math.max(0.001, (timestamp - startedAt.get(note.id)!) / 1000);
-      note.releaseVelocity = velocity;
-      extent = Math.max(extent, note.start + note.duration);
+      const completed = { ...note, duration: Math.max(0.001, (timestamp - startedAt.get(note.id)!) / 1000), releaseVelocity: velocity };
+      notes[indices.get(note.id)!] = completed;
+      extent = Math.max(extent, completed.start + completed.duration);
       pending.delete(key);
       startedAt.delete(note.id);
       revision++;
@@ -91,17 +96,20 @@ export function createRecording(clock = () => performance.now()) {
       for (const key of pending.keys()) this.end(key);
     },
     snapshot() {
-      const held = new Set(pending.values()),
-        time = clock();
-      return notes.map((note) => ({
-        ...note,
-        duration: held.has(note)
-          ? Math.max(0.001, (time - startedAt.get(note.id)!) / 1000)
-          : note.duration,
-      }));
+      if (!pending.size && cachedRevision === revision) return cached;
+      const held = new Set(pending.values()), time = clock();
+      cached = notes.map(note => held.has(note) ? {
+        ...note, duration: Math.max(0.001, (time - startedAt.get(note.id)!) / 1000),
+      } : note);
+      cachedRevision = revision;
+      return cached;
     },
     extent() {
-      return Math.max(extent, ...this.snapshot().map(n => n.start + n.duration));
+      let end = extent;
+      const time = clock();
+      for (const note of pending.values())
+        end = Math.max(end, note.start + Math.max(0.001, (time - startedAt.get(note.id)!) / 1000));
+      return end;
     },
     pendingIds: () => new Set([...pending.values()].map((note) => note.id)),
     replace(next: RecordedNote[]) {
@@ -109,18 +117,21 @@ export function createRecording(clock = () => performance.now()) {
         [...pending.values()].map((note) => [note.id, note]),
       );
       notes = next.filter(valid).map((note) => held.get(note.id) ?? note);
+      indices.clear();
+      notes.forEach((note, index) => indices.set(note.id, index));
       for (const note of notes)
         extent = Math.max(extent, note.start + note.duration);
       revision++;
     },
     trim() {
-      extent = Math.max(0, ...this.snapshot().map(n => n.start + n.duration));
+      extent = this.snapshot().reduce((end, n) => Math.max(end, n.start + n.duration), 0);
       if (!pending.size) origin = notes.length ? clock() - extent * 1000 : undefined;
       revision++;
       return extent;
     },
     clear() {
       notes = [];
+      indices.clear();
       origin = undefined;
       extent = 0;
       const held = [...pending.entries()];

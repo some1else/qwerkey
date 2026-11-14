@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { SynthParameters } from '../../audio';
 import { defaultParameters } from '../../audio';
 import { fields } from '../../instrument/parameters';
@@ -22,7 +23,7 @@ function Parameter({ field, value, controller }: { field: Field; value: number; 
     <span className="parameter_value">{value}</span>
   </div>;
 }
-export default function AudioParameters({ hidden, controller, parameters }: {
+function AudioParameters({ hidden, controller, parameters }: {
   hidden: boolean; controller: Controller | null; parameters: Readonly<SynthParameters>;
 }) {
   const oscillator = waveforms.findIndex(waveform => waveform.value === parameters.oscillator);
@@ -41,3 +42,5 @@ export default function AudioParameters({ hidden, controller, parameters }: {
     {fields.map(field => <Parameter key={field.id} field={field} value={parameters[field.id]} controller={controller} />)}
   </div>;
 }
+
+export default memo(AudioParameters);

@@ -26,16 +26,9 @@ const voiceLevel = 1 / 12;
 // still peak ~3.7 dB under the limiter, so the limiter and clip stages only
 // catch abnormal overloads instead of shaping ordinary chords.
 const makeupGain = 1.6;
-// Run the whole graph, dynamics included, well above the device rate; the
-// browser resamples to the output device.
-const oversampledRate = 192000;
-
+// Use the device rate; oversample only the nonlinear soft clipper.
 function createContext(): AudioContext {
-  try {
-    return new AudioContext({ sampleRate: oversampledRate });
-  } catch {
-    return new AudioContext();
-  }
+  return new AudioContext({ latencyHint: 'interactive' });
 }
 
 function softClipCurve(peak: number): Float32Array<ArrayBuffer> {

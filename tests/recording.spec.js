@@ -597,3 +597,34 @@ test("synth plays a live overdub on subsequent passes without restarting", async
   await page.locator(".roll_viewport").focus();
   await page.keyboard.press("Space");
 });
+
+test("completed snapshots are stable and held snapshots remain immutable", () => {
+  let time = 1000;
+  const store = recording(() => time);
+  store.start("one", 60);
+  time += 100;
+  const held = store.snapshot();
+  time += 100;
+  store.end("one");
+  expect(held[0].duration).toBeCloseTo(.1);
+  const completed = store.snapshot();
+  expect(completed[0].duration).toBeCloseTo(.2);
+  expect(store.snapshot()).toBe(completed);
+  store.start("two", 64);
+  expect(store.snapshot()[0]).toBe(completed[0]);
+  expect(store.count).toBe(2);
+});
+
+test("hidden recording avoids editor DOM and Space plays fresh capture", async ({ page }) => {
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.press("y");
+  await page.waitForTimeout(100);
+  await expect(page.locator(".roll_note")).toHaveCount(0);
+  await expect(page.locator(".roll_velocity")).toHaveCount(0);
+  await page.keyboard.press("Space");
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
+  await page.keyboard.press("Space");
+  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await expect(page.locator(".roll_note")).toHaveCount(1);
+});

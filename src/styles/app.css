@@ -99,7 +99,7 @@ a {
 	transition: background-color 1s;
 }
 .computer_keys .key_active {
-	transition: background-color 0.1s;
+	transition: background-color 0s;
 	background-color: orange;
 	transform: translate(0, 2px);
 }

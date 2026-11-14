@@ -87,7 +87,7 @@ for (const sampleRate of [44100, 48000]) {
     expect(result.graph.makeupGain).toBeCloseTo(1.6, 5);
     delete result.graph.makeupGain;
     expect(result.graph).toEqual({
-      contextOptions: { sampleRate: 192000 },
+      contextOptions: { latencyHint: 'interactive' },
       outputs: 1,
       stages: ['GainNode', 'DynamicsCompressorNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
       mixerGain: 1,
