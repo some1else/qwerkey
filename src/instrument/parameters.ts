@@ -7,7 +7,7 @@ export const fields = [
   { id: 'space', label: 'Space', unit: '%', title: 'Reverb, unison and stereo spread in percent', min: 0, max: 100, step: 1 },
   { id: 'voices', label: 'Voices', unit: '', title: 'Maximum simultaneous voices', min: 1, max: 32, step: 1 },
   { id: 'attack', label: 'Attack', unit: 'ms', title: 'Attack duration', min: 0, max: 1000, step: 1 },
-  { id: 'decay', label: 'Decay', unit: 'ms', title: 'Decay duration', min: 0, max: 2000, step: 1 },
+  { id: 'decay', label: 'Decay', unit: 'ms', title: 'Decay duration', min: 0, max: 3000, step: 1 },
   { id: 'sustain', label: 'Sustain', unit: 'dB', title: 'Sustain level in decibels relative to the attack peak', min: -96, max: 0, step: 0.1 },
   { id: 'release', label: 'Release', unit: 'ms', title: 'Release duration', min: 0, max: 10000, step: 1 },
 ] as const;

@@ -117,7 +117,7 @@ test('uses the requested defaults and holds sustain at relative dB until release
     await expect(page.locator(`#${id} input`)).toHaveValue(value);
   }
   await expect(page.getByText('Sustain', { exact: true })).toBeVisible();
-  for (const [id, max] of [['attack', '1000'], ['decay', '2000'], ['voices', '32']]) {
+  for (const [id, max] of [['attack', '1000'], ['decay', '3000'], ['voices', '32']]) {
     await expect(page.locator(`#${id} input`)).toHaveAttribute('max', max);
   }
   await page.locator('#instrument').focus();
