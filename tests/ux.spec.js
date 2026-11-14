@@ -17,7 +17,8 @@ for (const width of [1000, 668]) {
     const controls = await page.locator('.audio_parameter').evaluateAll(items => items.map(item => {
       const { x, y } = item.getBoundingClientRect(); return { x, y };
     }));
-    expect(new Set(controls.map(item => item.x)).size).toBe(4);
+    expect(controls).toHaveLength(10);
+    expect(new Set(controls.map(item => item.x)).size).toBe(5);
     expect(new Set(controls.map(item => item.y)).size).toBe(2);
     await setKnob(page, 'attack', 123);
     await page.screenshot({ path: `/tmp/qwerkey-just-play-${width}.png` });

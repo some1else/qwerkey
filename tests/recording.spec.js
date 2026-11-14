@@ -249,6 +249,15 @@ test("editor selection, move, delete, range and tab navigation do not trigger li
   await expect(
     page.getByRole("tab", { name: "Keyboard", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#buffer-mode')).toBeFocused();
+  await expect(page.locator('#buffer-mode')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.locator('#buffer-mode')).toBeFocused();
+  await expect(page.locator('.recorded_buffer')).toHaveAttribute('data-note-count', '0');
   expect(await page.pageErrors()).toEqual([]);
 });
 
@@ -548,13 +557,15 @@ test("grid selection transposes the whole group once and preserves metadata", as
   await page.keyboard.up("y");
   await page.keyboard.up("u");
   await page.getByRole("tab", { name: "Buffer", exact: true }).click();
-  const before = await page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(item.style.top)));
+  await expect(page.locator('.roll_note')).toHaveCount(2);
+  const positions = () => page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(getComputedStyle(item).top)));
+  const before = await positions();
+  expect(before.every(Number.isFinite)).toBe(true);
   await page.locator('.roll_grid').focus();
   await page.keyboard.press('ControlOrMeta+a');
   await expect(page.locator('.roll_note[data-selected]')).toHaveCount(2);
   await page.keyboard.press('Shift+ArrowUp');
-  const after = await page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(item.style.top)));
-  expect(after).toEqual(before.map(y => y - 12 * 18));
+  await expect.poll(positions).toEqual(before.map(y => y - 12 * 18));
   await page.keyboard.press('Backspace');
   await expect(page.locator('.roll_note')).toHaveCount(0);
 
@@ -695,6 +706,9 @@ test("completed snapshots are stable and held snapshots remain immutable", () =>
 });
 
 test("hidden recording avoids editor DOM and Space plays fresh capture", async ({ page }) => {
+  // Slow React commits used to let auto-fit scroll before zoom anchoring ran.
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setCPUThrottlingRate', { rate: 6 });
   await page.goto("./");
   await page.locator("#enabler").click();
   await page.keyboard.press("y");
@@ -705,7 +719,15 @@ test("hidden recording avoids editor DOM and Space plays fresh capture", async (
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.keyboard.press("Space");
   await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await expect.poll(() => page.locator('.roll_viewport').evaluate(element => {
+    const start = Number(element.querySelector('.roll_loop_start input').value);
+    const end = Number(element.querySelector('.roll_loop_end input').value);
+    const zoom = parseFloat(getComputedStyle(element.querySelector('.roll_grid')).getPropertyValue('--timeline-unit'));
+    return Math.abs((end - start) * zoom - (element.clientWidth - 32));
+  })).toBeLessThan(1);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(page.locator(".roll_note")).toHaveCount(1);
+  expect(await page.locator('.roll_viewport').evaluate(element => element.scrollLeft)).toBe(0);
 });
 
 test("stopped phrases capture first onset through Play, retaining silence and held notes", () => {

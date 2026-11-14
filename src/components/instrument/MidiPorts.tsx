@@ -8,8 +8,6 @@ function MidiPorts({ state, controller }: {state: Snapshot; controller: Controll
       <select id={`midi-${direction}`} value={selected} onChange={event => {
         if (direction === 'input') controller?.selectInput(event.target.value);
         else controller?.selectOutput(event.target.value);
-        event.currentTarget.blur();
-        event.currentTarget.closest<HTMLElement>('#instrument')?.focus({ preventScroll: true });
       }}>
         <option value="">-- Choose MIDI port --</option>{ports.map(port => <option key={port.id} value={port.id}>{port.name || port.id}</option>)}
       </select></span></div>;

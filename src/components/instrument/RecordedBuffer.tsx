@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PianoRoll } from "@audio-ui/react/piano-roll";
 import { Timeline } from "@audio-ui/react/timeline";
 import type { Controller } from "../../instrument/controller";
@@ -54,6 +54,7 @@ function RecordedBuffer({
     return () => cancelAnimationFrame(frame);
   }, [visible, zoom]);
   const scroll = useRef({ left: 0, top: 0 });
+  const [fit, setFit] = useState<{ zoom: number; bounds: readonly [number, number]; notes: RecordedNote[]; loopNotes: RecordedNote[] } | null>(null);
   const generation = useRef(0);
   const loop = useRef<ReturnType<typeof startLoop> | null>(null);
   const boundsRef = useRef<[number, number]>([0, 0.001]);
@@ -86,8 +87,8 @@ function RecordedBuffer({
   useEffect(() => {
     if (!visible) return;
     refresh();
-    // Measure the visible viewport, then scroll after the fitted zoom renders.
-    let frame = requestAnimationFrame(() => {
+    // Measure the visible viewport; the layout effect positions the fitted view.
+    const frame = requestAnimationFrame(() => {
       if (!body.current) return;
       const bounds: readonly [number, number] = controller?.recording.capturedLoop() ?? rangeRef.current ??
         [0, Math.max(0.001, controller?.recording.extent() || 5)];
@@ -95,26 +96,32 @@ function RecordedBuffer({
       const loopNotes = snapshot.filter(note => note.start < bounds[1] && note.start + note.duration > bounds[0]);
       const fittedZoom = Math.max(0.000001, Math.min(1000000,
         Math.max(1, body.current.clientWidth - 32) / Math.max(0.001, bounds[1] - bounds[0])));
+      setFit({ zoom: fittedZoom, bounds, notes: snapshot, loopNotes });
       setZoom(fittedZoom);
-      frame = requestAnimationFrame(() => {
-        if (!body.current) return;
-        body.current.scrollLeft = Math.max(0, bounds[0] * fittedZoom - 16);
-        const grid = body.current.querySelector<HTMLElement>('.roll_grid');
-        if (grid && loopNotes.length) {
-          const minPitch = snapshot.reduce((pitch, note) => Math.min(pitch, note.pitch), 41);
-          const maxPitch = snapshot.reduce((pitch, note) => Math.max(pitch, note.pitch), 96);
-          const low = loopNotes.reduce((pitch, note) => Math.min(pitch, note.pitch), 127);
-          const high = loopNotes.reduce((pitch, note) => Math.max(pitch, note.pitch), 0);
-          const rowHeight = grid.clientHeight / (maxPitch - minPitch + 1);
-          const gridTop = grid.getBoundingClientRect().top - body.current.getBoundingClientRect().top + body.current.scrollTop;
-          const rulerHeight = ruler.current?.offsetHeight ?? 0;
-          const center = gridTop + (maxPitch - (low + high) / 2 + 0.5) * rowHeight;
-          body.current.scrollTop = Math.max(0, center - (body.current.clientHeight + rulerHeight) / 2);
-        } else body.current.scrollTop = scroll.current.top;
-      });
     });
     return () => cancelAnimationFrame(frame);
   }, [visible]);
+  // Child layout effects anchor the timeline when zoom commits. Position the
+  // fitted range after those effects, rather than racing a second animation frame.
+  useLayoutEffect(() => {
+    if (!visible || !fit || zoom !== fit.zoom || !body.current) return;
+    setFit(null);
+    const element = body.current;
+    element.scrollLeft = Math.max(0, fit.bounds[0] * fit.zoom - 16);
+    const grid = element.querySelector<HTMLElement>('.roll_grid');
+    if (grid && fit.loopNotes.length) {
+      const minPitch = fit.notes.reduce((pitch, note) => Math.min(pitch, note.pitch), 41);
+      const maxPitch = fit.notes.reduce((pitch, note) => Math.max(pitch, note.pitch), 96);
+      const low = fit.loopNotes.reduce((pitch, note) => Math.min(pitch, note.pitch), 127);
+      const high = fit.loopNotes.reduce((pitch, note) => Math.max(pitch, note.pitch), 0);
+      const rowHeight = grid.clientHeight / (maxPitch - minPitch + 1);
+      const gridTop = grid.getBoundingClientRect().top - element.getBoundingClientRect().top + element.scrollTop;
+      const rulerHeight = ruler.current?.offsetHeight ?? 0;
+      const center = gridTop + (maxPitch - (low + high) / 2 + 0.5) * rowHeight;
+      element.scrollTop = Math.max(0, center - (element.clientHeight + rulerHeight) / 2);
+    } else element.scrollTop = scroll.current.top;
+    setViewport({ left: element.scrollLeft, width: element.clientWidth });
+  }, [fit, visible, zoom]);
   useEffect(() => {
     refresh();
     setZoom(
