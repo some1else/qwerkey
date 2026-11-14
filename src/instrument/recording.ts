@@ -100,6 +100,12 @@ export function createRecording(clock = () => performance.now()) {
         extent = Math.max(extent, note.start + note.duration);
       revision++;
     },
+    trim() {
+      extent = Math.max(0, ...this.snapshot().map(n => n.start + n.duration));
+      if (!pending.size) origin = notes.length ? clock() - extent * 1000 : undefined;
+      revision++;
+      return extent;
+    },
     clear() {
       notes = [];
       origin = undefined;

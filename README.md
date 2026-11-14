@@ -120,19 +120,25 @@ Opening Recorded buffer retains the selected output. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.
 
 The buffer uses an audio/ui piano roll with a seconds timeline and no musical
-meter or snapping. Scroll horizontally, zoom, or Fit to inspect the recording.
+meter or snapping. Scroll horizontally or zoom to inspect the recording. Fit trims
+unused trailing duration and frames the selected loop, or the whole buffer when
+no loop is selected, preserving note positions and leading silence.
 Select and drag notes to move them, drag their edges to resize, double-click
 empty space to draw, and use the velocity lane to change dynamics. Delete
 selected notes with the toolbar. Incoming held notes grow until release and
-cannot be edited until then. Editor keyboard shortcuts do not play Tonnetz notes.
+cannot be edited until then. Up/Down transposes selected notes by a semitone;
+Shift+Up/Down uses an octave.
+Editor keyboard shortcuts do not play Tonnetz notes.
 
 Drag empty space on the seconds ruler to draw a loop in either direction, drag
 the highlighted body to move it, or drag its edges to resize it. Focus the loop
 or an edge and use arrow keys for 0.01-second adjustments, or enter exact loop
 start/end seconds. The time range is independent of selected notes; Clear range
 restores the whole-buffer loop. **Play loop** repeats that range (or the
-whole buffer); **Stop** returns to its beginning. Editing or changing output
-stops playback. Playback and editor audition do not record themselves. Backgrounding
+whole buffer); **Stop** returns to its beginning. Space toggles playback from the
+instrument background or note editor. Playback continues across application tabs,
+loop changes, note edits, and output changes; a play/stop control remains available
+outside the editor. Playback and editor audition do not record themselves. Backgrounding
 the page stops playback and releases notes. Avoid routing a MIDI output back to
 the selected input, since external feedback is indistinguishable from live input.
 

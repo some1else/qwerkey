@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { rolldown } from "rolldown";
 import { readFile } from "node:fs/promises";
-let recording, midiFile, clipNotes, applyRollEdits;
+let recording, midiFile, clipNotes, applyRollEdits, startLoop;
 test.beforeAll(async () => {
   const bundle = await rolldown({
-    input: ["src/instrument/recording.ts", "src/instrument/midi-file.ts"],
+    input: ["src/instrument/recording.ts", "src/instrument/midi-file.ts", "src/instrument/transport.ts"],
   });
   const result = await bundle.generate({ format: "es" });
   for (const chunk of result.output.filter(
@@ -19,6 +19,7 @@ test.beforeAll(async () => {
       applyRollEdits = mod.applyRollEdits;
     }
     if (mod.midiFile) midiFile = mod.midiFile;
+    if (mod.startLoop) startLoop = mod.startLoop;
   }
   await bundle.close();
 });
@@ -338,7 +339,7 @@ test("ruler draws, moves and resizes the loop without editing notes", async ({ p
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-note-count", "1");
   await page.getByRole("button", { name: "Play loop", exact: true }).click();
   await end.fill("4");
-  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
   await expect(page.locator(".roll_loop")).toHaveAttribute("data-explicit", "true");
   await page.getByRole("button", { name: "Clear range", exact: true }).click();
   await expect(page.getByRole("button", { name: "Download selected range", exact: true })).toBeDisabled();
@@ -393,4 +394,114 @@ test("loop handles remain usable at low zoom and ruler touch drawing survives sc
   const download = await downloadEvent;
   expect(parse(await readFile(await download.path()))).toEqual({ events: [], end: 2000 });
   await page.screenshot({ path: "/tmp/qwerkey-loop-667.png" });
+});
+
+
+test("playback survives tabs, edits and Space toggles", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.playbackStarts = 0;
+    const start = OscillatorNode.prototype.start;
+    OscillatorNode.prototype.start = function (...args) {
+      window.playbackStarts++;
+      return start.apply(this, args);
+    };
+  });
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.down("y");
+  await page.waitForTimeout(150);
+  await page.keyboard.up("y");
+  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByLabel("Loop end (seconds)", { exact: true }).fill("1");
+  await page.getByRole("button", { name: "Play loop", exact: true }).click();
+  await page.getByRole("tab", { name: "Just play", exact: true }).click();
+  const starts = await page.evaluate(() => window.playbackStarts);
+  await page.waitForFunction(before => window.playbackStarts > before, starts);
+  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await page.locator(".roll_note").click();
+  await page.keyboard.press("Shift+ArrowUp");
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeDisabled();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Delete selected notes", exact: true }).click();
+  await expect(page.locator(".roll_note")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+});
+
+test("Fit trims historical extent and reanchors subsequent capture", () => {
+  let time = 0;
+  const store = recording(() => time);
+  store.start("a", 60);
+  time = 100;
+  store.end("a");
+  time = 10000;
+  store.start("b", 64);
+  time = 11000;
+  store.end("b");
+  store.replace(store.snapshot().filter(n => n.pitch === 60));
+  expect(store.extent()).toBe(11);
+  expect(store.trim()).toBeCloseTo(0.1);
+  store.start("c", 67);
+  expect(store.snapshot()[1].start).toBeCloseTo(0.1);
+});
+
+test("Fit frames a selected nonzero silent loop", async ({ page }) => {
+  await page.setViewportSize({ width: 667, height: 900 });
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  await page.getByLabel("Loop end (seconds)", { exact: true }).fill("30");
+  await page.getByLabel("Loop start (seconds)", { exact: true }).fill("20");
+  await page.getByRole("button", { name: "Fit", exact: true }).click();
+  const viewport = await page.locator(".roll_viewport").boundingBox();
+  const loop = await page.locator(".roll_loop").boundingBox();
+  expect(loop.x).toBeGreaterThanOrEqual(viewport.x);
+  expect(loop.x + loop.width).toBeLessThanOrEqual(viewport.x + viewport.width + 1);
+  await page.screenshot({ path: "/tmp/qwerkey-fit-667.png" });
+});
+
+
+test("running transport reconciles edits without retriggering unchanged notes", () => {
+  let time = 0;
+  const on = [], off = [];
+  const note = { id: "a", pitch: 60, channel: 0, velocity: 64, releaseVelocity: 64, start: 0, duration: 1, source: "local" };
+  const loop = startLoop([note], 2, { on: n => on.push(n.pitch), off: n => off.push(n.pitch), position: () => {} }, () => time);
+  try {
+    time = 0.2;
+    loop.update([{ ...note, duration: 1.5 }], 2, 0.2);
+    expect(on).toEqual([60]);
+    expect(off).toEqual([]);
+    loop.update([{ ...note, pitch: 72 }], 2, 0.2);
+    expect(on).toEqual([60, 72]);
+    expect(off).toEqual([60]);
+    loop.update([], 2, 0.2);
+    expect(off).toEqual([60, 72]);
+  } finally { loop(); }
+});
+
+test("grid selection transposes the whole group once and preserves metadata", async ({ page }) => {
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.down("y");
+  await page.keyboard.down("u");
+  await page.waitForTimeout(100);
+  await page.keyboard.up("y");
+  await page.keyboard.up("u");
+  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  const exported = async () => {
+    const event = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download entire buffer", exact: true }).click();
+    const download = await event;
+    return parse(await readFile(await download.path())).events;
+  };
+  const before = await exported();
+  await page.locator(".roll_grid").focus();
+  await page.keyboard.press("ControlOrMeta+a");
+  await expect(page.locator(".roll_note[data-selected]")).toHaveCount(2);
+  await page.keyboard.press("Shift+ArrowUp");
+  const after = await exported();
+  expect(after).toEqual(before.map(event => ({ ...event, pitch: event.pitch + 12 })));
 });

@@ -1,5 +1,8 @@
 # Recording and playback plan
 
+Playback continuity and Fit requirements are superseded by
+[Recorded buffer behavior changes](recorded-buffer-behavior.md).
+
 Status: core recording, editing, looping, and MIDI export implemented. See the implementation record below for validation and the remaining scheduling limitation.
 
 ## Intended behavior

@@ -190,13 +190,19 @@ export function createController() {
       refresh();
     },
     releaseAll,
+    releaseLive() {
+      for (const [owner, note] of held) if (note.origin !== "playback") this.release(owner);
+      this.releasePreview();
+    },
     selectMode(mode: Mode) {
       if (disposed || mode === state.mode) return;
+      const playback = [...held.entries()].filter(([, note]) => note.origin === "playback");
       releaseAll();
       midi.setEnabled(false);
       publish({ mode });
       midi.setEnabled(mode === "midi");
       if (mode === "midi") connection ??= midi.connect();
+      for (const [owner, note] of playback) this.press(owner, note);
     },
     setParameters(next: Partial<SynthParameters>) {
       if (disposed || !validParameters(next)) return;
@@ -213,8 +219,10 @@ export function createController() {
     },
     selectInput: midi.selectInput,
     selectOutput(id: string) {
+      const playback = [...held.entries()].filter(([, note]) => note.origin === "playback");
       releaseAll();
       midi.selectOutput(id);
+      for (const [owner, note] of playback) this.press(owner, note);
     },
     releasePreview() {
       for (const [owner, note] of held) {

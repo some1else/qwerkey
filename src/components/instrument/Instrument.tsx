@@ -9,6 +9,7 @@ import AudioParameters from "./AudioParameters";
 import MidiPorts from "./MidiPorts";
 import { ComputerKeyboard } from "./Keyboards";
 export default function Instrument() {
+  const [bufferPlaying, setBufferPlaying] = useState(false);
   const [tab, setTab] = useState<"audio" | "midi" | "buffer">("audio");
   const { state, ready, safari, controller, instrument, focus } =
     useInstrument();
@@ -18,6 +19,7 @@ export default function Instrument() {
         "Qwerkey’s MIDI mode is unavailable in Safari. You can keep playing in Just play or open Qwerkey in a browser with Web MIDI support.",
       );
     else {
+      controller.current?.releasePreview();
       setTab(mode);
       controller.current?.selectMode(mode);
     }
@@ -131,7 +133,7 @@ export default function Instrument() {
             role="tab"
             aria-selected={tab === "buffer"}
             onClick={() => {
-              controller.current?.releaseAll();
+              controller.current?.releaseLive();
               setTab("buffer");
             }}
           >
@@ -143,8 +145,7 @@ export default function Instrument() {
           id="playback-panel"
           aria-labelledby={`${tab === "buffer" ? "buffer" : tab}-mode`}
         >
-          {tab === "buffer" ? (
-            <>
+          <div hidden={tab !== "buffer"}>
               <label>
                 Playback output{" "}
                 <select
@@ -157,12 +158,14 @@ export default function Instrument() {
                   {!safari && <option value="midi">MIDI</option>}
                 </select>
               </label>
-              <RecordedBuffer
-                key={`${state.mode}:${state.ports.outputId}:${state.ports.inputId}`}
-                controller={controller.current}
-              />
-            </>
-          ) : (
+              <RecordedBuffer controller={controller.current} onPlayingChange={setBufferPlaying} visible={tab === "buffer"} />
+          </div>
+          {tab !== "buffer" && (
+            <button onClick={() => window.dispatchEvent(new Event("qwerkey:toggle-buffer"))}>
+              {bufferPlaying ? "Stop buffer" : "Play buffer"}
+            </button>
+          )}
+          {tab !== "buffer" && (
             <>
               <ComputerKeyboard state={state} onPointerDown={pointerDown} />
               <PianoKeyboard

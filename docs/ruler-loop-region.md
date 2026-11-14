@@ -1,5 +1,8 @@
 # Piano roll ruler loop-region plan
 
+Playback continuity and Fit requirements are superseded by
+[Recorded buffer behavior changes](recorded-buffer-behavior.md).
+
 Status: implemented. See the implementation record below.
 
 ## Goal

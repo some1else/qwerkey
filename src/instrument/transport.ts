@@ -11,7 +11,7 @@ export function startLoop(
   },
   clock = () => performance.now() / 1000,
 ) {
-  const edges = notes
+  let edges = notes
     .flatMap((note) => [
       { time: note.start, on: true, note },
       { time: note.start + note.duration, on: false, note },
@@ -21,7 +21,7 @@ export function startLoop(
   let cancelled = false,
     cycle = 0,
     index = 0;
-  const epoch = clock();
+  let epoch = clock();
   let timer: ReturnType<typeof setTimeout>;
   const release = () => {
     held.forEach(output.off);
@@ -56,9 +56,38 @@ export function startLoop(
     );
   }
   pump();
-  return () => {
+  const cancel = () => {
     cancelled = true;
     clearTimeout(timer);
     release();
   };
+  return Object.assign(cancel, {
+    update(next: readonly RecordedNote[], nextLength: number, position: number) {
+      if (cancelled) return;
+      clearTimeout(timer);
+      length = Math.max(0.001, nextLength);
+      const time = Math.max(0, Math.min(position, length - 0.000001));
+      const active = new Map(next.filter(n => n.start <= time && n.start + n.duration > time).map(n => [n.id, n]));
+      for (const [id, previous] of held) {
+        const note = active.get(id);
+        if (!note || note.pitch !== previous.pitch || note.channel !== previous.channel) {
+          output.off(previous);
+          held.delete(id);
+        }
+      }
+      for (const [id, note] of active) if (!held.has(id)) {
+        held.set(id, note);
+        output.on(note);
+      }
+      edges = next.flatMap(note => [
+        { time: note.start, on: true, note },
+        { time: note.start + note.duration, on: false, note },
+      ]).sort((a, b) => a.time - b.time || Number(a.on) - Number(b.on));
+      index = edges.findIndex(edge => edge.time > time);
+      if (index < 0) index = edges.length;
+      cycle = 0;
+      epoch = clock() - time;
+      pump();
+    },
+  });
 }
