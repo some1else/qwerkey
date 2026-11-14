@@ -342,7 +342,7 @@ a {
 }
 
 @media (max-width: 667px) {
-	.mode_switch { display: none; }
+	.mode_switch { display: flex; }
 	.computer_keys { margin-top: 0; }
 	.piano_scroll { margin-top: 1.5rem; }
 	.sound_controls { margin-top: 1rem; }
@@ -378,12 +378,12 @@ a {
 .buffer_toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .8rem; }
 .buffer_toolbar input { width: 6rem; }
 .roll_body { display: grid; grid-template-columns: 4rem minmax(0,1fr); max-height: 560px; overflow-y: auto; border: 1px solid #666; }
-.roll_keys { margin-top: 32px; position: relative; height: calc(var(--piano-roll-rows) * 18px); }
+.roll_keys { margin-top: 44px; position: relative; height: calc(var(--piano-roll-rows) * 18px); }
 .roll_keys button { border-radius: 0; font-size: 10px; padding: 0; }
 .roll_keys button[data-color="black"] { background: #333; color: white; }
 .roll_viewport { overflow-x: auto; min-width: 0; }
-.roll_ruler { height: 32px; position: relative; background: #333; }
-.roll_ruler [data-dragging], .roll_ruler > div { background: #cc880044; }
+.roll_ruler { height: 44px; position: relative; background: #333; }
+
 .roll_grid { position: relative; height: calc(var(--piano-roll-rows) * 18px); background: #292929; }
 .roll_row { border-bottom: 1px solid #444; box-sizing: border-box; }
 .roll_row[data-color="black"] { background: #1c1c1c; }
@@ -403,12 +403,12 @@ a {
 .recorded_buffer button:hover:not(:disabled) { border-color: orange; }
 .recorded_buffer button:focus-visible { outline: 2px solid orange; outline-offset: 2px; }
 .recorded_buffer .roll_note { padding: 0; border-radius: 2px; background: #e49b26; border-color: #ffc567; }
-.roll_ruler > [data-part="mark"] { background: transparent; padding-left: 3px; font-size: 11px; border-left: 1px solid #777; }
+.roll_ruler .roll_tick { background: transparent; padding-left: 3px; font-size: 11px; border-left: 1px solid #777; }
 .mode_switch { width: max-content; max-width: calc(100% - 2rem); }
 .mode_switch button { flex: 0 0 auto; }
 .roll_body { height: 560px; overflow: hidden; }
 .roll_key_clip { position: relative; overflow: hidden; height: 560px; }
-.roll_key_clip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 32px; background: #333; z-index: 4; }
+.roll_key_clip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 44px; background: #333; z-index: 4; }
 .roll_viewport { height: 560px; overflow: auto; }
 .roll_ruler { position: sticky; top: 0; z-index: 4; }
 /* Timeline primitives set positioning inline; keep the ruler above vertically scrolled rows. */
@@ -416,3 +416,18 @@ a {
 .recorded_buffer .roll_keys button { background: #ddd; color: #222; border-radius: 0; border: 0; border-bottom: 1px solid #888; }
 .recorded_buffer .roll_keys button[data-color="black"] { background: #333; color: #eee; }
 .recorded_buffer .roll_keys button[data-active] { background: orange; color: #111; }
+
+.roll_ruler { cursor: crosshair; touch-action: none; user-select: none; }
+.roll_tick { pointer-events: none; z-index: 1; }
+.roll_loop { top: 0; height: 100%; box-sizing: border-box; background: #cc880044; border: 1px solid #e49b26; cursor: grab; }
+.roll_loop[data-explicit="false"] { background: #ffffff12; border-color: #999; }
+.roll_loop:hover, .roll_loop[data-dragging] { background: #cc880077; }
+.roll_loop[data-dragging] { cursor: grabbing; }
+.roll_loop:focus-within { outline: 2px solid white; outline-offset: -3px; }
+.roll_loop_handle { position: absolute; top: 0; bottom: 0; width: 24px; cursor: ew-resize; background: #e49b2644; }
+.roll_loop_handle::after { content: ''; position: absolute; top: 12px; bottom: 5px; width: 3px; background: #ffc567; }
+.roll_loop_start { left: 0; }
+.roll_loop_end { right: 0; }
+.roll_loop_start::after { left: 2px; }
+.roll_loop_end::after { right: 2px; }
+.roll_loop_handle:hover, .roll_loop_handle:focus-within { background: #e49b2699; outline: 2px solid white; outline-offset: -2px; }

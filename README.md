@@ -126,8 +126,11 @@ empty space to draw, and use the velocity lane to change dynamics. Delete
 selected notes with the toolbar. Incoming held notes grow until release and
 cannot be edited until then. Editor keyboard shortcuts do not play Tonnetz notes.
 
-Drag across the ruler or enter exact loop start/end seconds to select a time
-range independently of selected notes. **Play loop** repeats that range (or the
+Drag empty space on the seconds ruler to draw a loop in either direction, drag
+the highlighted body to move it, or drag its edges to resize it. Focus the loop
+or an edge and use arrow keys for 0.01-second adjustments, or enter exact loop
+start/end seconds. The time range is independent of selected notes; Clear range
+restores the whole-buffer loop. **Play loop** repeats that range (or the
 whole buffer); **Stop** returns to its beginning. Editing or changing output
 stops playback. Playback and editor audition do not record themselves. Backgrounding
 the page stops playback and releases notes. Avoid routing a MIDI output back to

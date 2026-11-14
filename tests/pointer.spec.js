@@ -27,8 +27,7 @@ for (const [width, height] of [[375, 667], [666, 667], [667, 375], [668, 375], [
     expect(enable.x).toBeGreaterThanOrEqual(0);
     expect(enable.x + enable.width).toBeLessThanOrEqual(width);
     await page.locator('#enabler').click();
-    if (width <= 667) await expect(page.locator('.mode_switch')).toBeHidden();
-    else await expect(page.locator('.mode_switch')).toBeVisible();
+    await expect(page.locator('.mode_switch')).toBeVisible();
     const instrument = await page.locator('#instrument').boundingBox();
     if (instrument.height <= height - 16) {
       expect(instrument.y + instrument.height / 2).toBeCloseTo(height / 2, 0);

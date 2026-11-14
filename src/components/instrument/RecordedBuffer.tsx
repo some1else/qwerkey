@@ -10,6 +10,10 @@ import {
 import { startLoop } from "../../instrument/transport";
 import { midiFile } from "../../instrument/midi-file";
 
+const MIN_RANGE_LENGTH = 0.001;
+const KEYBOARD_STEP = 0.01;
+const describeSeconds = (value: number) => `${Number(value.toFixed(3))} seconds`;
+
 export default function RecordedBuffer({
   controller,
 }: {
@@ -19,6 +23,7 @@ export default function RecordedBuffer({
   const [range, setRange] = useState<[number, number] | null>(null);
   const [selection, setSelection] = useState<readonly (string | number)[]>([]);
   const [zoom, setZoom] = useState(100);
+  const [timelineEnd, setTimelineEnd] = useState(5);
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [undo, setUndo] = useState<RecordedNote[] | null>(null);
@@ -32,7 +37,8 @@ export default function RecordedBuffer({
     controller?.recording.extent() ?? 0,
     ...notes.map((n) => n.start + n.duration),
   );
-  const duration = Math.max(5, extent + 1);
+  const effectiveRange: [number, number] = range ?? [0, extent];
+  const duration = Math.max(timelineEnd, extent + 1, range?.[1] ?? 0);
   function refresh() {
     setNotes(controller?.recording.snapshot() ?? []);
   }
@@ -141,9 +147,18 @@ export default function RecordedBuffer({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function changeRange(next: readonly [number, number]) {
-    if (next[0] >= 0 && next[1] > next[0] && next.every(Number.isFinite)) {
+    if (
+      next.every(Number.isFinite) &&
+      next[0] >= 0 &&
+      next[1] >= next[0] + MIN_RANGE_LENGTH &&
+      (!range || next[0] !== range[0] || next[1] !== range[1])
+    ) {
       stop();
+      // Retain space exposed by an explicit range so drawing a shorter one
+      // cannot shrink the lane and shift its scroll offset mid-gesture.
+      setTimelineEnd(Math.max(duration, next[1]));
       setRange([next[0], next[1]]);
+      setPosition(next[0]);
     }
   }
   const pending = controller?.recording.pendingIds() ?? new Set<string>();
@@ -166,6 +181,7 @@ export default function RecordedBuffer({
             setUndo(controller?.recording.snapshot() ?? []);
             controller?.recording.clear();
             setSelection([]);
+            setTimelineEnd(5);
             setRange(null);
             setPosition(0);
             refresh();
@@ -224,10 +240,10 @@ export default function RecordedBuffer({
             <input
               type="number"
               min="0"
-              step="0.01"
-              value={Number((range ?? [0, extent])[i]!.toFixed(3))}
+              step={KEYBOARD_STEP}
+              value={Number(effectiveRange[i]!.toFixed(3))}
               onChange={(e) => {
-                const next: [number, number] = [...(range ?? [0, extent])];
+                const next: [number, number] = [...effectiveRange];
                 next[i] = Number(e.target.value);
                 changeRange(next);
               }}
@@ -238,6 +254,7 @@ export default function RecordedBuffer({
           onClick={() => {
             stop();
             setRange(null);
+            setPosition(0);
           }}
         >
           Clear range
@@ -252,10 +269,14 @@ export default function RecordedBuffer({
           seconds ruler to select a loop.
         </p>
       )}
+      <p id="loop-ruler-help">
+        Drag empty ruler space to draw a loop, its body to move it, or its edges
+        to resize. Use arrow keys on the focused loop or edge for 0.01 s steps.
+      </p>
       <Timeline.Root
         duration={duration}
         snapStep={0}
-        step={0.01}
+        step={KEYBOARD_STEP}
         zoom={zoom}
         onZoomChange={setZoom}
         position={position}
@@ -313,7 +334,7 @@ export default function RecordedBuffer({
                   keys.current.style.transform = `translateY(${-event.currentTarget.scrollTop}px)`;
               }}
             >
-              <Timeline.Ruler className="roll_ruler" aria-label="Seconds">
+              <Timeline.Lane className="roll_ruler">
                 {Array.from(
                   {
                     length: Math.min(
@@ -323,21 +344,34 @@ export default function RecordedBuffer({
                   },
                   (_, i) => i * Math.max(1, Math.ceil(60 / zoom)),
                 ).map((time) => (
-                  <Timeline.Mark key={time} value={time}>
+                  <Timeline.Mark className="roll_tick" key={time} value={time}>
                     {time} s
                   </Timeline.Mark>
                 ))}
                 <Timeline.Range
+                  className="roll_loop"
                   aria-label="Loop range"
+                  aria-describedby="loop-ruler-help"
+                  getAriaValueText={describeSeconds}
+                  data-explicit={range ? "true" : "false"}
+                  minDrawnWidth={60}
                   drawable
-                  minLength={0.001}
-                  value={range ?? [0, extent]}
+                  minLength={MIN_RANGE_LENGTH}
+                  value={effectiveRange}
                   onValueChange={changeRange}
                 >
-                  <Timeline.RangeHandle edge="start" aria-label="Loop start" />
-                  <Timeline.RangeHandle edge="end" aria-label="Loop end" />
+                  <Timeline.RangeHandle
+                    className="roll_loop_handle roll_loop_start"
+                    edge="start"
+                    aria-label="Loop start"
+                  />
+                  <Timeline.RangeHandle
+                    className="roll_loop_handle roll_loop_end"
+                    edge="end"
+                    aria-label="Loop end"
+                  />
                 </Timeline.Range>
-              </Timeline.Ruler>
+              </Timeline.Lane>
               <PianoRoll.Grid className="roll_grid" aria-label="Recorded notes">
                 <PianoRoll.Rows>
                   {(pitch) => (

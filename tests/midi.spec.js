@@ -257,7 +257,7 @@ test('defaults to Audio behind the splash and delays MIDI access', async ({ page
   expect(switchBox.y + switchBox.height).toBeLessThan(keyboardBox.y);
   await page.screenshot({ path: '/tmp/qwerkey-audio-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.mode_switch')).toBeHidden();
+  await expect(page.locator('.mode_switch')).toBeVisible();
 });
 
 test('switching releases audio and MIDI notes and preserves selected ports', async ({ page }) => {

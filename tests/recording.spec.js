@@ -299,3 +299,98 @@ test("editor merge preserves concurrent notes, channel metadata and pending iden
     }),
   ]);
 });
+
+test("ruler draws, moves and resizes the loop without editing notes", async ({ page }) => {
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.press("y");
+  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  const start = page.getByLabel("Loop start (seconds)", { exact: true });
+  const end = page.getByLabel("Loop end (seconds)", { exact: true });
+  const ruler = page.locator(".roll_ruler");
+  const box = await ruler.boundingBox();
+  const ticks = page.locator(".roll_tick");
+  const unit = (await ticks.nth(1).boundingBox()).x - (await ticks.nth(0).boundingBox()).x;
+  const drag = async (from, to, y = box.y + 25) => {
+    await page.mouse.move(from, y);
+    await page.mouse.down();
+    await page.mouse.move(to, y, { steps: 12 });
+    await page.mouse.up();
+  };
+  const bounds = async (a, b) => {
+    await expect.poll(async () => Number(await start.inputValue())).toBeCloseTo(a, 2);
+    await expect.poll(async () => Number(await end.inputValue())).toBeCloseTo(b, 2);
+  };
+  // Begin over a tick label: marks must let drawing reach the lane.
+  await drag(box.x + 2 * unit + 2, box.x + 4 * unit, box.y + 6);
+  await bounds(2 + 2 / unit, 4);
+  await drag(box.x + 3 * unit, box.x + 2.5 * unit);
+  await bounds(1.5 + 2 / unit, 3.5);
+  const left = await page.locator(".roll_loop_start").boundingBox();
+  await drag(left.x + 8, left.x + 8 + unit / 4);
+  await bounds(1.75 + 2 / unit, 3.5);
+  const right = await page.locator(".roll_loop_end").boundingBox();
+  await drag(right.x + 16, right.x + 16 + unit / 4);
+  await bounds(1.75 + 2 / unit, 3.75);
+  await page.getByRole("slider", { name: "Loop start", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await bounds(1.76 + 2 / unit, 3.75);
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-note-count", "1");
+  await page.getByRole("button", { name: "Play loop", exact: true }).click();
+  await end.fill("4");
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeDisabled();
+  await expect(page.locator(".roll_loop")).toHaveAttribute("data-explicit", "true");
+  await page.getByRole("button", { name: "Clear range", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Download selected range", exact: true })).toBeDisabled();
+  // Backward drawing replaces the default region.
+  await drag(box.x + 4 * unit, box.x + 2 * unit);
+  await bounds(2, 4);
+  await end.fill("12");
+  await expect.poll(async () => (await ruler.boundingBox()).width).toBeGreaterThan(box.width);
+  await expect(page.locator(".roll_note")).toHaveCount(1);
+});
+
+test("loop handles remain usable at low zoom and ruler touch drawing survives scrolling", async ({ page, context }) => {
+  await page.setViewportSize({ width: 667, height: 900 });
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.getByRole("tab", { name: "Recorded buffer", exact: true }).click();
+  const start = page.getByLabel("Loop start (seconds)", { exact: true });
+  const end = page.getByLabel("Loop end (seconds)", { exact: true });
+  await end.fill("20");
+  await start.fill("1");
+  await end.fill("1.001");
+  await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+  const left = await page.locator(".roll_loop_start").boundingBox();
+  const right = await page.locator(".roll_loop_end").boundingBox();
+  expect(right.x - left.x).toBeGreaterThan(30);
+  await page.getByRole("slider", { name: "Loop end", exact: true }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(end).toHaveValue("1.001");
+  await page.getByRole("slider", { name: "Loop range", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(start).toHaveValue("1.01");
+  await expect(end).toHaveValue("1.011");
+  await page.getByRole("button", { name: "Clear range", exact: true }).click();
+  await end.fill("20");
+  await start.fill("18");
+  await page.locator(".roll_viewport").evaluate(el => { el.scrollLeft = 100; el.scrollTop = 200; });
+  const ruler = await page.locator(".roll_ruler").boundingBox();
+  const viewport = await page.locator(".roll_viewport").boundingBox();
+  expect(Math.abs(ruler.y - viewport.y)).toBeLessThan(2);
+  const ticks = page.locator(".roll_tick");
+  const unit = (await ticks.nth(1).boundingBox()).x - (await ticks.nth(0).boundingBox()).x;
+  const client = await context.newCDPSession(page);
+  const y = ruler.y + 25;
+  const x1 = ruler.x + unit * 3, x2 = ruler.x + unit * 5;
+  await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x1, y }] });
+  await client.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x2, y }] });
+  await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect.poll(async () => Number(await start.inputValue())).toBeCloseTo(3, 2);
+  await expect.poll(async () => Number(await end.inputValue())).toBeCloseTo(5, 2);
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download selected range", exact: true }).click();
+  const download = await downloadEvent;
+  expect(parse(await readFile(await download.path()))).toEqual({ events: [], end: 2000 });
+  await page.screenshot({ path: "/tmp/qwerkey-loop-667.png" });
+});
