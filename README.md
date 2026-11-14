@@ -126,7 +126,7 @@ playback, including silence after the last note. Stop, then play a new phrase to
 capture another loop; starting playback without new notes reuses the existing
 region. Manually drawing, adjusting, or clearing the region takes over from this
 automatic capture for the current phrase.
-The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer retains the
+The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer fits the current loop region to the viewport and retains the
 output selected through Audio or Midi. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.
 

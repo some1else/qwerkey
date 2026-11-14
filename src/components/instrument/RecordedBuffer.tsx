@@ -55,9 +55,6 @@ function RecordedBuffer({
   }, [visible, zoom]);
   const centered = useRef(false);
   const scroll = useRef({ left: 0, top: 0 });
-  useEffect(() => {
-    if (visible && body.current) { body.current.scrollLeft = scroll.current.left; body.current.scrollTop = scroll.current.top; }
-  }, [visible]);
   const generation = useRef(0);
   const loop = useRef<ReturnType<typeof startLoop> | null>(null);
   const boundsRef = useRef<[number, number]>([0, 0.001]);
@@ -87,7 +84,25 @@ function RecordedBuffer({
     if (loop.current) updatePlayback(rangeRef.current, snapshot);
     else if (visibleRef.current) setNotes(snapshot);
   }
-  useEffect(() => { if (visible) refresh(); }, [visible]);
+  useEffect(() => {
+    if (!visible) return;
+    refresh();
+    // Measure the visible viewport, then scroll after the fitted zoom renders.
+    let frame = requestAnimationFrame(() => {
+      if (!body.current) return;
+      const bounds: readonly [number, number] = controller?.recording.capturedLoop() ?? rangeRef.current ??
+        [0, Math.max(0.001, controller?.recording.extent() || 5)];
+      const fittedZoom = Math.max(0.000001, Math.min(1000000,
+        Math.max(1, body.current.clientWidth - 32) / Math.max(0.001, bounds[1] - bounds[0])));
+      setZoom(fittedZoom);
+      frame = requestAnimationFrame(() => {
+        if (!body.current) return;
+        body.current.scrollLeft = Math.max(0, bounds[0] * fittedZoom - 16);
+        body.current.scrollTop = scroll.current.top;
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [visible]);
   useEffect(() => {
     refresh();
     setZoom(

@@ -94,12 +94,12 @@ export default function Instrument() {
             const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')).filter(item => item.getClientRects().length);
             const index = tabs.indexOf(event.target as HTMLButtonElement);
             const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + 1) % tabs.length;
-            tabs[next]?.click(); tabs[next]?.focus();
+            tabs[next]?.click();
           }}>
           {(["keyboard", "buffer"] as const).map(view => (
             <button key={view} id={`${view}-mode`} type="button" role="tab"
               aria-controls={`${view}-panel`} aria-selected={tab === view} tabIndex={tab === view ? 0 : -1}
-              onClick={() => { controller.current?.releaseLive(); setTab(view); }}>
+              onClick={() => { controller.current?.releaseLive(); setTab(view); focus(); }}>
               {view === "keyboard" ? "Keyboard" : "Buffer"}
             </button>
           ))}

@@ -304,8 +304,16 @@ test("ruler draws, moves and resizes the loop without editing notes", async ({ p
   const start = edge(page, "start");
   const end = edge(page, "end");
   const ruler = page.locator(".roll_ruler");
-  const box = await ruler.boundingBox();
   const ticks = page.locator(".roll_tick");
+  // Entry fits the short recorded phrase; zoom out to draw a multi-second loop.
+  await ruler.hover();
+  for (let i = 0; i < 15; i++) {
+    const spacing = (await ticks.nth(1).boundingBox()).x - (await ticks.nth(0).boundingBox()).x;
+    if (spacing * 5 < (await page.locator(".roll_viewport").boundingBox()).width) break;
+    await page.mouse.wheel(0, -500);
+    await page.waitForTimeout(60);
+  }
+  const box = await ruler.boundingBox();
   const unit = (await ticks.nth(1).boundingBox()).x - (await ticks.nth(0).boundingBox()).x;
   const drag = async (from, to, y = box.y + 25) => {
     await page.mouse.move(from, y);
@@ -561,7 +569,7 @@ test("incoming MIDI is recorded at the looping playhead even on a hidden editor"
   await expect.poll(() => page.evaluate(() => window.sent.filter(data => data[0] === 0x93 && data[1] === 74 && data[2] === 101).length)).toBeGreaterThanOrEqual(2);
   await expect.poll(() => page.evaluate(() => window.sent.some(data => data[0] === 0x83 && data[1] === 74))).toBe(true);
   await page.locator("#buffer-mode").click();
-  await expect(page.locator(".roll_note")).toHaveCount(2);
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-note-count", "2");
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.locator(".roll_viewport").focus();
   await page.keyboard.press("Space");
@@ -736,5 +744,5 @@ test("Space closes stopped phrases at the gesture, including silence, and rearms
   expect(secondEnd - secondStart).toBeCloseTo(secondTiming, 1);
   await page.waitForTimeout(100);
   expect(Number(await edge(page, "end").inputValue())).toBe(secondEnd);
-  await expect(page.locator(".roll_note")).toHaveCount(2);
+  await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-note-count", "2");
 });
