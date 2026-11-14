@@ -90,7 +90,7 @@ for (const sampleRate of [44100, 48000]) {
       contextOptions: { latencyHint: 'interactive' },
       outputs: 1,
       stages: ['GainNode', 'DynamicsCompressorNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
-      mixerGain: 1,
+      mixerGain: 0.5,
       oversample: ['4x', 'none'],
       voices: 56,
       voiceOutputs: true,

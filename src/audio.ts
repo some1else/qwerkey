@@ -20,11 +20,12 @@ interface Voice {
   tune(parameters: SynthParameters): void;
 }
 
-// Twelve voices at their attack peak sum to 0 dBFS at the mixer input.
+// Six coherent voices at MIDI velocity 127 sum to nearly full scale before
+// filtering (velocity 64 is unity). Reserve another 6 dB at the submix for
+// waveform/filter transients; resonant overloads reach the bus dynamics.
 const voiceLevel = 1 / 12;
-// Makeup after the bus compressor (+4 dB). Twelve simultaneous square voices
-// still peak ~3.7 dB under the limiter, so the limiter and clip stages only
-// catch abnormal overloads instead of shaping ordinary chords.
+const submixGain = 0.5;
+// Master makeup after the bus compressor (+4 dB), before output protection.
 const makeupGain = 1.6;
 // Use the device rate; oversample only the nonlinear soft clipper.
 function createContext(): AudioContext {
@@ -51,7 +52,7 @@ function softClipCurve(peak: number): Float32Array<ArrayBuffer> {
 
 function createMixer(context: AudioContext): GainNode {
   const mixer = context.createGain();
-  mixer.gain.value = 1;
+  mixer.gain.value = submixGain;
 
   const compressor = context.createDynamicsCompressor();
   // A low threshold evens out chord density so makeup can lift single notes.
@@ -115,7 +116,10 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
   const attack = settings.attack / 1000;
   const decay = settings.decay / 1000;
   const release = settings.release / 1000;
-  const volume = voiceLevel * velocity / 64;
+  // Reduce the upper register by 3 dB per octave above A4, up to 12 dB.
+  // Apply it to the whole envelope so velocity and sustain stay proportional.
+  const highNoteDb = Math.min(12, Math.max(0, rootNote - 69) * 3 / 12);
+  const volume = voiceLevel * velocity / 64 * 10 ** (-highNoteDb / 20);
   const sustain = volume * 10 ** (settings.sustain / 20);
   // Tiny offsets keep zero-duration envelope stages ordered.
   const points = [
@@ -248,7 +252,7 @@ export function createSynth() {
   }
 
   function setParameters(next: Partial<SynthParameters>) {
-    if (next.voices !== undefined && (!Number.isInteger(next.voices) || next.voices < 1 || next.voices > 64)) return;
+    if (next.voices !== undefined && (!Number.isInteger(next.voices) || next.voices < 1 || next.voices > 32)) return;
     parameters = { ...parameters, ...next };
     while (activeVoices.size > parameters.voices) stealOldest();
     for (const voice of heldNotes.values()) voice.tune(parameters);
