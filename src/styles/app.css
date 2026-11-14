@@ -414,9 +414,10 @@ a {
   margin: 2rem auto 0;
   padding: 0 1rem;
 }
-.output_choice { display: grid; gap: 1rem; color: #999; font-size: .8125rem; }
-.output_choice > span { font-weight: bold; }
-.output_switch { margin: 0; }
+.output_choice { display: grid; }
+.output_switch { flex-direction: column; margin: 0; }
+.output_switch button:first-child { border-radius: .375rem .375rem 0 0; }
+.output_switch button:last-child { border-radius: 0 0 .375rem .375rem; margin-left: 0; margin-top: -1px; }
 .sound_controls { width: 100%; max-width: none; margin: 0; padding: 0; min-height: 17rem; align-items: center; }
 .audio_parameters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem .5rem; }
 .midi_ports { display: grid; grid-template-columns: 1fr; gap: 1rem; padding: 0; }

@@ -182,16 +182,6 @@ export default function RecordedBuffer({
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function fit() {
-    const end = controller?.recording.trim() ?? 0;
-    const target = range ?? [0, Math.max(0.001, end)];
-    const width = body.current?.clientWidth ?? 600;
-    setTimelineEnd(Math.max(end, range?.[1] ?? 0, 0.001));
-    setZoom(Math.max(0.000001, (width - 24) / (target[1]! - target[0]!)));
-    updatePlayback();
-    requestAnimationFrame(() => { if (body.current) body.current.scrollLeft = Math.max(0, target[0]! * (width - 24) / (target[1]! - target[0]!) - 12); });
-  }
-
   function seek(time: number) {
     rangeRef.current = null;
     setRange(null);
@@ -283,13 +273,12 @@ export default function RecordedBuffer({
     >
       <div className="buffer_toolbar" role="group" aria-label="Buffer actions">
         <div className="buffer_actions" role="group" aria-label="Transport">
-          <button onClick={play} disabled={playing || !notes.length}>Play loop</button>
+          <button onClick={play} disabled={playing || !notes.length}>Play</button>
           <button onClick={stop} disabled={!playing}>Stop</button>
         </div>
         <div className="buffer_actions" role="group" aria-label="Recording actions">
-          <button onClick={() => confirmation.current?.showModal()}>Clear buffer</button>
-          <button onClick={download} disabled={!notes.length && !range}>{downloadLabel}</button>
-          <button onClick={fit}>Fit</button>
+          <button onClick={() => confirmation.current?.showModal()}>Clear</button>
+          <button onClick={download} disabled={!notes.length && !range} title={downloadLabel}>Download</button>
         </div>
         <span>{notes.length} notes · {extent.toFixed(2)} s</span>
       </div>

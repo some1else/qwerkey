@@ -99,7 +99,7 @@ test('uses the requested defaults and holds sustain at relative dB until release
   for (const [id, value] of [['voices', '8'], ['attack', '9'], ['decay', '1800'], ['sustain', '-12'], ['release', '2200'], ['frequency', '440'], ['resonance', '0.7']]) {
     await expect(page.locator(`#${id} input`)).toHaveValue(value);
   }
-  await expect(page.getByText('S (dB)', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sustain (dB)', { exact: true })).toBeVisible();
   await page.locator('#instrument').focus();
   await page.keyboard.down('y');
   const ramps = await page.evaluate(() => window.ramps);

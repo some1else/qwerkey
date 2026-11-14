@@ -35,7 +35,7 @@ export default function AudioParameters({ hidden, controller, parameters }: {
           const waveform = waveforms[next];
           if (waveform) controller?.setParameters({ oscillator: waveform.value });
         }} />
-      <span className="parameter_label">Oscillator</span>
+      <span className="parameter_label">Osc (shape)</span>
       <span className="parameter_value">{waveforms[oscillator]?.label}</span>
     </div>
     {fields.map(field => <Parameter key={field.id} field={field} value={parameters[field.id]} controller={controller} />)}

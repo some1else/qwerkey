@@ -121,8 +121,7 @@ export default function Instrument() {
         </div>
           <div className="output_controls">
             <div className="output_choice">
-              <span id="output-label">Output</span>
-              <div className="mode_switch output_switch" role="group" aria-labelledby="output-label">
+              <div className="mode_switch output_switch" role="group" aria-label="Output">
                 <button id="audio-mode" type="button" aria-pressed={state.mode === "audio"} onClick={() => selectMode("audio")}>Audio</button>
                 <button id="midi-mode" type="button" aria-pressed={state.mode === "midi"} aria-disabled={safari || undefined} onClick={() => selectMode("midi")}>Midi</button>
               </div>
