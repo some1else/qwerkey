@@ -116,6 +116,12 @@ returns to the instrument background. MIDI input highlights remain display-only.
 The **Just play**, **Send MIDI**, and **Recorded buffer** tabs share a session
 recording. Every live keyboard note is captured automatically; selected MIDI
 input notes are also captured in Send MIDI mode, preserving channel and velocity.
+While buffer playback is looping, incoming notes start at the current absolute
+playhead position, including when the editor is hidden. The roll and running
+transport share the current recording data, so overdubs play on subsequent passes
+without restarting playback. Held notes retain their
+full elapsed duration across loop wraps or Stop. Outside playback, capture resumes
+at the buffer end with subsequent elapsed silence preserved.
 The Recorded buffer tab is available above 667 px; recording and the Play/Stop
 buffer control remain available on mobile. Opening Recorded buffer retains the
 output selected through Just play or Send MIDI. Reloading the page resets

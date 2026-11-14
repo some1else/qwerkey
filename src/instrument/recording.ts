@@ -16,6 +16,8 @@ export function createRecording(clock = () => performance.now()) {
     extent = 0;
   let notes: RecordedNote[] = [];
   const pending = new Map<string, RecordedNote>();
+  const startedAt = new Map<string, number>();
+  let capturePosition: ((timestamp: number) => number) | null = null;
   const now = (timestamp = clock()) =>
     origin === undefined ? 0 : Math.max(0, (timestamp - origin) / 1000);
   const valid = (n: RecordedNote) =>
@@ -38,6 +40,15 @@ export function createRecording(clock = () => performance.now()) {
     n.velocity >= 1 &&
     n.velocity <= 127;
   return {
+    // A transport supplies absolute buffer time; note lengths always use elapsed
+    // wall time so wrapping/seeking/stopping cannot shorten a held recording.
+    setCapturePosition(source: ((timestamp: number) => number) | null) {
+      if (capturePosition && !source) {
+        const end = this.extent();
+        origin = notes.length ? clock() - end * 1000 : undefined;
+      }
+      capturePosition = source;
+    },
     get revision() {
       return revision;
     },
@@ -57,21 +68,23 @@ export function createRecording(clock = () => performance.now()) {
         channel,
         velocity,
         releaseVelocity: 64,
-        start: now(timestamp),
+        start: capturePosition ? Math.max(0, capturePosition(timestamp)) : now(timestamp),
         duration: 0,
         source,
       };
       notes.push(note);
       pending.set(key, note);
+      startedAt.set(note.id, timestamp);
       revision++;
     },
     end(key: string, velocity = 64, timestamp = clock()) {
       const note = pending.get(key);
       if (!note) return;
-      note.duration = Math.max(0.001, now(timestamp) - note.start);
+      note.duration = Math.max(0.001, (timestamp - startedAt.get(note.id)!) / 1000);
       note.releaseVelocity = velocity;
       extent = Math.max(extent, note.start + note.duration);
       pending.delete(key);
+      startedAt.delete(note.id);
       revision++;
     },
     finish() {
@@ -79,16 +92,16 @@ export function createRecording(clock = () => performance.now()) {
     },
     snapshot() {
       const held = new Set(pending.values()),
-        time = now();
+        time = clock();
       return notes.map((note) => ({
         ...note,
         duration: held.has(note)
-          ? Math.max(0.001, time - note.start)
+          ? Math.max(0.001, (time - startedAt.get(note.id)!) / 1000)
           : note.duration,
       }));
     },
     extent() {
-      return Math.max(extent, pending.size ? now() : 0);
+      return Math.max(extent, ...this.snapshot().map(n => n.start + n.duration));
     },
     pendingIds: () => new Set([...pending.values()].map((note) => note.id)),
     replace(next: RecordedNote[]) {
@@ -112,6 +125,7 @@ export function createRecording(clock = () => performance.now()) {
       extent = 0;
       const held = [...pending.entries()];
       pending.clear();
+      startedAt.clear();
       for (const [key, note] of held)
         this.start(key, note.pitch, note.channel, note.velocity, note.source);
       revision++;

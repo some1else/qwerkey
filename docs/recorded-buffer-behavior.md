@@ -17,9 +17,9 @@ Status: implemented. See the implementation record below.
    range start, not the bounds captured when Play was first clicked.
 3. Moving, resizing, transposing, deleting, drawing, and changing note velocities
    keeps playback running. Committed edits become audible on the next transport
-   update, with active notes reconciled as described below. Live capture continues
-   to be excluded from the current playback snapshot until the next explicit Play;
-   editor updates must not accidentally import concurrent live recordings.
+   update, with active notes reconciled as described below. Live capture and editor changes feed the same recording snapshot used by the
+   roll and running transport; overdubs are available on subsequent loop passes
+   without restarting playback.
 4. Space toggles buffer playback when focus is on the instrument background or
    buffer editing surface. Ignore repeated keydown, composition, and modified Space.
    Preserve text/number entry, native button activation, select controls, and the
@@ -199,7 +199,8 @@ button is available on the performance tabs.
 The deadline transport now supports updates that reconcile active owners by ID,
 pitch, and channel, preserving unchanged voices and replacing future note edges.
 Range changes retain an in-range absolute playhead or continue at the new start.
-Editor changes update playback data independently of concurrent live recordings.
+The roll and transport now share each refreshed recording snapshot, including
+concurrent live recordings; the separate playback snapshot has been removed.
 Space handling respects native controls and the performance piano; grid and note
 selection transposition uses one group displacement bounded by MIDI 0–127.
 

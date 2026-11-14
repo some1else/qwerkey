@@ -72,6 +72,10 @@ export function startLoop(
     release();
   };
   return Object.assign(cancel, {
+    position(at = clock()) {
+      const elapsed = Math.max(0, at - epoch);
+      return elapsed % length;
+    },
     update(next: readonly RecordedNote[], nextLength: number, position: number) {
       if (cancelled) return;
       clearTimeout(timer);

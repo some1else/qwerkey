@@ -594,3 +594,110 @@ test("transport starts at a sought position without sounding earlier notes", () 
   expect(sounded).toEqual([62]);
   expect(positions[0]).toBeCloseTo(0.6);
 });
+
+test("recording follows exact loop time and keeps held durations across wraps and stop", () => {
+  let time = 0;
+  const store = recording(() => time);
+  store.start("original", 60);
+  time = 100;
+  store.end("original");
+  // Simulate a long session: new loop recordings must not land at 120 seconds.
+  time = 120000;
+  const transport = startLoop([], 2, {
+    startPosition: 0.4, on: () => {}, off: () => {}, position: () => {},
+  }, () => time / 1000);
+  store.setCapturePosition(timestamp => 5 + transport.position(timestamp / 1000));
+  time += 500;
+  store.start("midi", 74, 3, 99, "midi");
+  expect(store.snapshot()[1].start).toBeCloseTo(5.9);
+  time += 1500;
+  expect(store.snapshot()[1].duration).toBeCloseTo(1.5);
+  expect(store.extent()).toBeCloseTo(7.4);
+  store.start("local", 67);
+  expect(store.snapshot()[2].start).toBeCloseTo(5.4);
+  store.setCapturePosition(null);
+  transport();
+  time += 100;
+  store.end("midi", 27);
+  store.end("local");
+  expect(store.snapshot()[1]).toEqual(expect.objectContaining({
+    start: expect.closeTo(5.9), duration: expect.closeTo(1.6),
+    channel: 3, velocity: 99, releaseVelocity: 27, source: "midi",
+  }));
+  expect(store.snapshot()[2].duration).toBeCloseTo(0.1);
+  // Ordinary capture resumes at the buffer end, with elapsed silence preserved.
+  store.start("after", 70);
+  expect(store.snapshot()[3].start).toBeCloseTo(7.5);
+});
+
+test("incoming MIDI is recorded at the looping playhead even on a hidden editor", async ({ page }) => {
+  await page.addInitScript(() => {
+    const input = { id: "in", name: "Test In", state: "connected" };
+    window.sent = [];
+    const output = { id: "out", name: "Test Out", state: "connected", send: data => window.sent.push(Array.from(data)) };
+    window.receive = data => input.onmidimessage({ data: new Uint8Array(data), receivedTime: performance.now() });
+    Object.defineProperty(navigator, "requestMIDIAccess", { value: async () => ({
+      inputs: new Map([["in", input]]), outputs: new Map([["out", output]]),
+    }) });
+  });
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.locator("#midi-mode").click();
+  await page.locator("#midi-input").selectOption("in");
+  await page.locator("#midi-output").selectOption("out");
+  await page.evaluate(() => window.receive([0x90, 60, 90]));
+  await page.waitForTimeout(100);
+  await page.evaluate(() => window.receive([0x80, 60, 64]));
+  await page.locator("#buffer-mode").click();
+  await edge(page, "end").fill("2");
+  await edge(page, "start").fill("0.5");
+  await page.getByRole("button", { name: "Play loop", exact: true }).click();
+  await page.locator("#midi-mode").click();
+  await page.evaluate(() => window.receive([0x93, 74, 101]));
+  await page.waitForTimeout(120);
+  await page.evaluate(() => window.receive([0x83, 74, 33]));
+  // Leave the editor hidden for subsequent passes: capture must update playback
+  // without an editor gesture or another Play, and playback must not re-record.
+  await expect.poll(() => page.evaluate(() => window.sent.filter(data => data[0] === 0x93 && data[1] === 74 && data[2] === 101).length)).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => page.evaluate(() => window.sent.some(data => data[0] === 0x83 && data[1] === 74))).toBe(true);
+  await page.locator("#buffer-mode").click();
+  await expect(page.locator(".roll_note")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  const event = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download loop range", exact: true }).click();
+  const file = await event;
+  const parsed = parse(await readFile(await file.path()));
+  expect(parsed.events).toHaveLength(2);
+  expect(parsed.events[0]).toEqual(expect.objectContaining({ status: 0x93, pitch: 74, velocity: 101 }));
+  expect(parsed.events[0].time).toBeLessThan(500);
+  expect(parsed.events[1].time - parsed.events[0].time).toBeGreaterThanOrEqual(100);
+  expect(parsed.events[1].velocity).toBe(33);
+});
+
+test("synth plays a live overdub on subsequent passes without restarting", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.frequencies = [];
+    const start = OscillatorNode.prototype.start;
+    OscillatorNode.prototype.start = function (...args) {
+      window.frequencies.push(this.frequency.value);
+      return start.apply(this, args);
+    };
+  });
+  await page.goto("./");
+  await page.locator("#enabler").click();
+  await page.keyboard.press("y");
+  await page.locator("#buffer-mode").click();
+  await edge(page, "end").fill("0.8");
+  await page.getByRole("button", { name: "Play loop", exact: true }).click();
+  await page.locator("#audio-mode").click();
+  await page.keyboard.down("u");
+  await page.waitForTimeout(150);
+  await page.keyboard.up("u");
+  // U is MIDI pitch 73: one live voice, then at least two loop playback voices.
+  await expect.poll(() => page.evaluate(() => window.frequencies.filter(hz => Math.abs(hz - 440 * 2 ** (4 / 12)) < 0.1).length)).toBeGreaterThanOrEqual(3);
+  await page.locator("#buffer-mode").click();
+  await expect(page.locator(".roll_note")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+});

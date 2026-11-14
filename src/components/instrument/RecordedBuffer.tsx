@@ -39,7 +39,6 @@ export default function RecordedBuffer({
   const centered = useRef(false);
   const generation = useRef(0);
   const loop = useRef<ReturnType<typeof startLoop> | null>(null);
-  const playbackNotes = useRef<RecordedNote[]>([]);
   const boundsRef = useRef<[number, number]>([0, 0.001]);
   const positionRef = useRef(0);
   const visibleRef = useRef(visible);
@@ -56,7 +55,9 @@ export default function RecordedBuffer({
   const effectiveRange: [number, number] = range ?? [0, extent];
   const duration = Math.max(timelineEnd, extent + 1, range?.[1] ?? 0);
   function refresh() {
-    setNotes(controller?.recording.snapshot() ?? []);
+    const snapshot = controller?.recording.snapshot() ?? [];
+    if (loop.current) updatePlayback(rangeRef.current, snapshot);
+    else setNotes(snapshot);
   }
   useEffect(() => {
     refresh();
@@ -66,7 +67,7 @@ export default function RecordedBuffer({
     let revision = -1;
     const timer = setInterval(() => {
       const store = controller?.recording;
-      if (store && (store.revision !== revision || (visibleRef.current && store.pendingIds().size))) {
+      if (store && (store.revision !== revision || ((visibleRef.current || loop.current) && store.pendingIds().size))) {
         revision = store.revision;
         refresh();
       }
@@ -104,26 +105,19 @@ export default function RecordedBuffer({
     generation.current++;
     stopRef.current();
   }
-  function updatePlayback(nextRange = rangeRef.current) {
+  function updatePlayback(nextRange = rangeRef.current, snapshot = controller?.recording.snapshot() ?? [], requestedPosition?: number) {
+    setNotes(snapshot);
     const end = Math.max(0.001, controller?.recording.extent() ?? 0);
     const bounds: [number, number] = nextRange ?? [0, end];
-    const absolute = positionRef.current >= bounds[0] && positionRef.current < bounds[1]
-      ? positionRef.current : bounds[0];
+    const current = requestedPosition ?? (loop.current ? boundsRef.current[0] + loop.current.position() : positionRef.current);
+    const absolute = current >= bounds[0] && current < bounds[1] ? current : bounds[0];
     boundsRef.current = bounds;
     positionRef.current = absolute;
-    if (loop.current) loop.current.update(clipNotes(playbackNotes.current, ...bounds), bounds[1] - bounds[0], absolute - bounds[0]);
+    if (loop.current) loop.current.update(clipNotes(snapshot, ...bounds), bounds[1] - bounds[0], absolute - bounds[0]);
     setPosition(loop.current ? absolute : bounds[0]);
   }
-  function applyEdits(next: RecordedNote[], created: string[] = []) {
-    const before = new Map(notes.map(n => [n.id, n]));
-    const after = new Map(next.map(n => [n.id, n]));
-    playbackNotes.current = playbackNotes.current.filter(n => !before.has(n.id) || after.has(n.id)).map(n => {
-      const edited = after.get(n.id);
-      return edited && !controller?.recording.pendingIds().has(n.id) && JSON.stringify(edited) !== JSON.stringify(before.get(n.id)) ? edited : n;
-    });
-    for (const n of next) if (created.includes(n.id) && !controller?.recording.pendingIds().has(n.id)) playbackNotes.current.push(n);
+  function applyEdits(next: RecordedNote[]) {
     controller?.recording.replace(next);
-    updatePlayback();
     refresh();
   }
   async function play() {
@@ -146,7 +140,7 @@ export default function RecordedBuffer({
     const clipped = clipNotes(snapshot, bounds[0], bounds[1]);
     const length = bounds[1] - bounds[0];
     if (length <= 0) return;
-    playbackNotes.current = snapshot;
+    setNotes(snapshot);
     boundsRef.current = bounds;
     const initial = requestedPosition >= bounds[0] && requestedPosition < bounds[1] ? requestedPosition : bounds[0];
     const cancel = startLoop(clipped, length, {
@@ -160,7 +154,11 @@ export default function RecordedBuffer({
       },
     });
     loop.current = cancel;
+    controller.recording.setCapturePosition(timestamp =>
+      boundsRef.current[0] + cancel.position(timestamp / 1000),
+    );
     stopRef.current = () => {
+      controller.recording.setCapturePosition(null);
       cancel();
       loop.current = null;
       setPlaying(false);
@@ -191,7 +189,7 @@ export default function RecordedBuffer({
     rangeRef.current = null;
     setRange(null);
     positionRef.current = time;
-    if (loop.current) updatePlayback(null);
+    if (loop.current) updatePlayback(null, controller?.recording.snapshot() ?? [], time);
     else setPosition(time);
   }
   useEffect(() => {
@@ -292,7 +290,6 @@ export default function RecordedBuffer({
           setTimelineEnd(Math.max(end, range?.[1] ?? 0, 0.001));
           setZoom(nextZoom);
           updatePlayback();
-          refresh();
           requestAnimationFrame(() => { if (body.current) body.current.scrollLeft = Math.max(0, target[0]! * nextZoom - 12); });
         }}>
           Fit
@@ -320,7 +317,6 @@ export default function RecordedBuffer({
             setRange(null);
             positionRef.current = 0;
             setPosition(0);
-            playbackNotes.current = [];
             refresh();
           }}>Clear recording</button>
         </form>
@@ -357,9 +353,7 @@ export default function RecordedBuffer({
                 controller.recording.pendingIds(),
                 value,
               ),
-              value.filter(n => !notes.some(old => old.id === String(n.id))).map(n => String(n.id)),
             );
-            refresh();
           }}
           onNoteOn={(pitch) =>
             controller?.press(`preview:${pitch}`, { pitch, origin: "preview" })
