@@ -22,7 +22,8 @@ for (const sampleRate of [44100, 48000]) {
     await page.goto('./');
     await page.locator('#enabler').click();
     await expect(page.locator('.overlay')).toBeHidden();
-    await page.locator('#voices').fill('64');
+    await page.locator('#voices input').focus();
+    await page.keyboard.press('End');
     await page.locator('.piano_keys').evaluate(element => { element.setPointerCapture = () => {}; });
     await page.locator('.piano_keys .key').evaluateAll(keys => {
       keys.forEach((key, index) => {

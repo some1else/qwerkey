@@ -308,32 +308,6 @@ a {
   color: #999;
   font-size: .75rem;
 }
-.audio_parameters label {
-  display: flex;
-  flex-direction: column;
-  gap: .5rem;
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-}
-.audio_parameters label:first-child { flex: 1.2; }
-.audio_parameters input, .audio_parameters select {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 2.25rem;
-  padding: .5rem .25rem;
-  border: 1px solid #777;
-  border-radius: .375rem;
-  background: #222;
-  color: white;
-  font: inherit;
-  text-align: center;
-  color-scheme: dark;
-}
-.audio_parameters input:focus-visible, .audio_parameters select:focus-visible {
-  outline: 3px solid orange;
-  outline-offset: 3px;
-}
 @media (width > 667px) {
   .sound_controls > [hidden] {
     display: flex !important;
@@ -346,29 +320,23 @@ a {
 	.computer_keys { margin-top: 0; }
 	.piano_scroll { margin-top: 1.5rem; }
 	.sound_controls { margin-top: 1rem; }
-	.audio_parameters input, .audio_parameters select { min-height: 44px; }
 	.midi_port select, .mode_switch button { min-height: 44px; }
 	.computer_keys .hz { right: .2rem; font-size: .4375rem; }
 	.computer_keys .note { left: 0; padding: 0 .1rem; }
 }
 
 .audio_parameters { align-items: stretch; }
-.audio_parameter { display: flex; flex: 1; flex-direction: column; align-items: center; gap: .5rem; min-width: 0; }
-.audio_parameter.oscillator_parameter { flex: 1.2; }
-.audio_parameters .audio_parameter label { flex: none; white-space: nowrap; }
-.parameter_spacer, .parameter_knob, .parameter_fader { height: 3rem; width: 100%; }
+.audio_parameter { display: flex; flex-direction: column; align-items: center; gap: .5rem; min-width: 0; text-align: center; }
+.parameter_label { white-space: nowrap; }
+.parameter_value { color: #eee; font-variant-numeric: tabular-nums; }
+.parameter_knob { height: 3rem; width: 100%; }
 .knob_control { position: relative; width: 3rem; height: 3rem; margin: auto; cursor: ns-resize; }
 .knob_track, .knob_indicator { position: absolute; inset: 0; width: 100%; height: 100%; }
 .knob_track { color: #555; }
 .knob_indicator { color: orange; }
 .knob_thumb { position: absolute; inset: .5rem; border-radius: 50%; background: #333; }
 .knob_thumb > span { position: absolute; top: .15rem; left: calc(50% - 1px); width: 2px; height: .6rem; background: orange; }
-.parameter_knob:focus-within .knob_control, .parameter_fader:focus-within .fader_control { outline: 2px solid orange; outline-offset: 3px; border-radius: .375rem; }
-.fader_control { position: relative; height: 3rem; width: 100%; cursor: ew-resize; }
-.fader_track { position: absolute; top: calc(50% - 2px); left: 0; right: 0; height: 4px; background: #555; border-radius: 2px; }
-.fader_indicator { height: 100%; background: orange; border-radius: inherit; }
-.fader_thumb { position: absolute; top: calc(50% - .5rem); width: .6rem; height: 1rem; background: #eee; border-radius: 2px; }
-
+.parameter_knob:focus-within .knob_control { outline: 2px solid orange; outline-offset: 3px; border-radius: .375rem; }
 .piano_keys { width: 33rem; height: 4rem; }
 .piano_keys .key { top: 0; padding: 0; margin: 0; cursor: pointer; }
 .piano_keys .raised_key { height: 62%; z-index: 1; margin: 0; }
@@ -462,9 +430,6 @@ a {
   .computer_keys { margin-top: 2rem; }
 }
 
-.audio_parameters input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
-.audio_parameters input[type="number"]::-webkit-inner-spin-button,
-.audio_parameters input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .buffer_toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-bottom: 1rem; color: #999; font-size: .8125rem; }
 .buffer_actions { display: flex; }
 .recorded_buffer .buffer_actions button { padding: .5rem .75rem; border: 1px solid #777; border-radius: 0; background: #222; color: #999; font: inherit; font-weight: bold; line-height: 1.25rem; }

@@ -2,12 +2,12 @@ import type { SynthParameters } from '../audio';
 
 export const fields = [
   { id: 'voices', label: '# (Voices)', title: 'Maximum simultaneous voices', min: 1, max: 64, step: 1 },
+  { id: 'frequency', label: 'Freq (Hz)', title: 'Lowpass cutoff: 440 follows the played note; 880 is one octave above', min: 1, max: 20000, step: 1 },
+  { id: 'resonance', label: 'Reso (Q)', title: 'Lowpass resonance in classic Q', min: 0.1, max: 30, step: 0.1 },
   { id: 'attack', label: 'A (ms)', title: 'Attack duration', min: 0, max: 10000, step: 1 },
   { id: 'decay', label: 'D (ms)', title: 'Decay duration', min: 0, max: 10000, step: 1 },
   { id: 'sustain', label: 'S (dB)', title: 'Sustain level in decibels relative to the attack peak', min: -96, max: 0, step: 0.1 },
   { id: 'release', label: 'R (ms)', title: 'Release duration', min: 0, max: 10000, step: 1 },
-  { id: 'frequency', label: 'Freq (Hz)', title: 'Lowpass cutoff: 440 follows the played note; 880 is one octave above', min: 1, max: 20000, step: 1 },
-  { id: 'resonance', label: 'Reso (Q)', title: 'Lowpass resonance in classic Q', min: 0.1, max: 30, step: 0.1 },
 ] as const;
 
 

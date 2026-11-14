@@ -238,7 +238,8 @@ test('Audio and MIDI share a stable controls row above 667px', async ({ page }) 
   const layout = () => page.locator('.computer_keys, .piano_scroll, .sound_controls')
     .evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
   const audioLayout = await layout();
-  await expect(page.getByRole('combobox')).toHaveCount(1);
+  await expect(page.getByRole('slider')).toHaveCount(8);
+  await expect(page.getByRole('combobox')).toHaveCount(0);
   await page.locator('#midi-mode').click();
   await expect(page.getByRole('combobox')).toHaveCount(2);
   expect(await layout()).toEqual(audioLayout);

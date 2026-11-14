@@ -1,4 +1,12 @@
 import { test, expect } from '@playwright/test';
+async function setKnob(page, id, value) {
+  await page.locator(`#${id} input[type="range"]`).evaluate((input, next) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, String(next));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, value);
+}
+
+
 for (const width of [1000, 668]) {
   test(`view and output layouts at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -11,7 +19,7 @@ for (const width of [1000, 668]) {
     }));
     expect(new Set(controls.map(item => item.x)).size).toBe(4);
     expect(new Set(controls.map(item => item.y)).size).toBe(2);
-    await page.locator('#attack').fill('123');
+    await setKnob(page, 'attack', 123);
     await page.screenshot({ path: `/tmp/qwerkey-just-play-${width}.png` });
     await page.locator('#midi-mode').click();
     const input = await page.locator('#midi-input').boundingBox();
@@ -27,7 +35,7 @@ for (const width of [1000, 668]) {
     await page.locator('#keyboard-mode').click();
     await expect(page.locator('#midi-mode')).toHaveAttribute('aria-pressed', 'true');
     await page.locator('#audio-mode').click();
-    await expect(page.locator('#attack')).toHaveValue('123');
+    await expect(page.locator('#attack input')).toHaveValue('123');
     await page.locator('#buffer-mode').click();
     await page.setViewportSize({ width: 667, height: 1000 });
     await expect(page.locator('#keyboard-mode')).toHaveAttribute('aria-selected', 'true');
@@ -40,14 +48,14 @@ test('Buffer actions and shared output controls preserve settings and playback h
   await page.locator('#enabler').click();
   await expect(page.locator('#audio-mode')).toHaveText('Audio');
   await expect(page.locator('#midi-mode')).toHaveText('Midi');
-  await expect(page.locator('#attack')).toHaveCSS('appearance', 'textfield');
-  await page.locator('#attack').fill('12');
+  await expect(page.locator('#attack input')).toHaveAttribute('type', 'range');
+  await setKnob(page, 'attack', 12);
   await page.locator('#instrument').focus();
   await page.keyboard.down('y');
   await page.waitForTimeout(800);
   await page.keyboard.up('y');
   await page.locator('#buffer-mode').click();
-  await expect(page.locator('#attack')).toHaveValue('12');
+  await expect(page.locator('#attack input')).toHaveValue('12');
   await expect(page.locator('#audio-mode')).toHaveCount(1);
   await page.getByRole('button', { name: 'Fit', exact: true }).click();
   const download = page.waitForEvent('download');
