@@ -30,7 +30,7 @@ function warmthOutputGain(percent: number): number {
 }
 
 export const defaultParameters: SynthParameters = {
-  oscillator: 'triangle', voices: 8, attack: 9, decay: 1800, sustain: -12,
+  oscillator: 'triangle', voices: 8, attack: 9, decay: 900, sustain: -12,
   release: 2200, frequency: 440, resonance: 0.7, warmth: effectReference, space: effectReference,
 };
 
