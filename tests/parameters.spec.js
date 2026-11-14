@@ -48,6 +48,14 @@ async function openSynth(page) {
   await page.locator('#enabler').click();
 }
 
+async function pressPiano(page, pitch) {
+  const key = page.locator(`.piano_keys .key_${pitch}`);
+  const box = await key.boundingBox();
+  await page.locator('.piano_keys').evaluate(element => { element.setPointerCapture = () => {}; });
+  await key.dispatchEvent('pointerdown', { button: 0, pointerId: pitch,
+    clientX: box.x + box.width / 2, clientY: box.y + box.height * .85 });
+}
+
 test.afterEach(async ({ page }) => { expect(await page.pageErrors()).toEqual([]); });
 
 test('tracks each chord note and tunes oscillator and classic Q while held', async ({ page }) => {
@@ -56,7 +64,7 @@ test('tracks each chord note and tunes oscillator and classic Q while held', asy
     for (const key of keys) key.setPointerCapture = () => {};
   });
   for (const pitch of [69, 81]) {
-    await page.locator(`.piano_keys .key_${pitch}`).dispatchEvent('pointerdown', { button: 0, pointerId: pitch });
+    await pressPiano(page, pitch);
   }
   const graph = () => page.evaluate(() => ({
     oscillators: window.oscillators.map(node => [node.type, node.frequency.value]),
@@ -159,7 +167,7 @@ test('limits polyphony, prefers release tails, and applies lower limits immediat
   await page.locator('.piano_keys .key').evaluateAll(keys => {
     for (const key of keys) key.setPointerCapture = () => {};
   });
-  const press = pitch => page.locator(`.piano_keys .key_${pitch}`).dispatchEvent('pointerdown', { button: 0, pointerId: pitch });
+  const press = pitch => pressPiano(page, pitch);
   const release = pitch => page.locator(`.piano_keys .key_${pitch}`).dispatchEvent('pointerup', { pointerId: pitch });
   for (let pitch = 60; pitch < 68; pitch++) await press(pitch);
   expect(await page.evaluate(() => window.stops)).toEqual([]);
@@ -181,4 +189,63 @@ test('limits polyphony, prefers release tails, and applies lower limits immediat
   await press(71);
   await press(72);
   expect(await page.evaluate(() => window.stops.length)).toBe(10);
+});
+
+test('knob keyboard, drag and reset synchronize exact entry and held-note tuning', async ({ page }) => {
+  test.setTimeout(60000);
+  await openSynth(page);
+  await page.locator('#instrument').focus();
+  await page.keyboard.down('y');
+  await page.keyboard.up('y');
+  const slider = page.getByRole('slider', { name: 'Lowpass resonance in classic Q control', exact: true });
+  await page.locator('#resonance').fill('2');
+  await expect(slider).toHaveValue('2');
+  await slider.focus();
+  await page.keyboard.press('End');
+  await expect(page.locator('#resonance')).toHaveValue('30');
+  await page.keyboard.press('Home');
+  await expect(page.locator('#resonance')).toHaveValue('0.1');
+  const control = page.locator('.parameter_knob').last().locator('.knob_control');
+  const box = await control.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 30, { steps: 6 });
+  await page.mouse.up();
+  expect(Number(await page.locator('#resonance').inputValue())).toBeGreaterThan(0.1);
+  await control.dblclick();
+  await expect(page.locator('#resonance')).toHaveValue('0.7');
+  expect(await page.evaluate(() => window.oscillators.length)).toBe(1);
+});
+
+test('sustain fader synchronizes decimal values and updates the native envelope', async ({ page }) => {
+  await openSynth(page);
+  const slider = page.getByRole('slider', { name: 'Sustain level in decibels relative to the attack peak control', exact: true });
+  await page.locator('#sustain').fill('-6.5');
+  await expect(slider).toHaveValue('-6.5');
+  await slider.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('#sustain')).toHaveValue('-6.4');
+  await page.locator('#instrument').focus();
+  await page.keyboard.down('y');
+  const ramps = await page.evaluate(() => window.ramps);
+  expect(ramps[2].value).toBeCloseTo((1 / 12) * 10 ** (-6.4 / 20), 6);
+  await page.keyboard.up('y');
+});
+
+test('drafts survive note renders, reject off-step values and restore on blur or Escape', async ({ page }) => {
+  await openSynth(page);
+  await page.locator('#resonance').fill('2');
+  await page.locator('#resonance').fill('2.25');
+  const slider = page.getByRole('slider', { name: 'Lowpass resonance in classic Q control', exact: true });
+  await expect(slider).toHaveValue('2');
+  await page.evaluate(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', keyCode: 89 }));
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'y', keyCode: 89 }));
+  });
+  await expect(page.locator('#resonance')).toHaveValue('2.25');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#resonance')).toHaveValue('2');
+  await page.locator('#resonance').fill('');
+  await page.locator('#voices').focus();
+  await expect(page.locator('#resonance')).toHaveValue('2');
 });

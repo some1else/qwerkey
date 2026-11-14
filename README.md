@@ -96,3 +96,17 @@ Type checking uses `astro check` and TypeScript 6, supported by the current Astr
 checker. The production build and Playwright tests use the same configured base.
 Migration tests bundle a separate React Strict Mode harness; no test route or
 controls are included in the deployed site.
+
+## Audio controls
+
+Audio controls use the headless `@audio-ui/react` primitives (pinned to 0.13.0),
+with Qwerkey's own CSS. Drag a knob vertically, use its wheel or keyboard, or
+enter an exact value in the number field below it. Shift gives finer knob drag;
+double-click/tap resets a knob to its default. Sustain uses a horizontal fader.
+Invalid numeric drafts keep the last accepted sound; blur or Escape restores
+that accepted value. The controller shares accepted settings between widgets.
+
+The piano also uses audio/ui: dragging across keys plays a glissando, each touch
+can hold a note, and arrow keys navigate the piano after focusing it. Space or
+Enter holds the focused note until release. QWERTY playing resumes when focus
+returns to the instrument background. MIDI input highlights remain display-only.

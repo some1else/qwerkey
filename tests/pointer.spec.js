@@ -140,3 +140,54 @@ for (const cleanup of ['blur', 'pagehide', 'visibility', 'mode']) {
     expect(await page.evaluate(() => window.audioCalls.releases)).toBe(1);
   });
 }
+
+test('native piano glides between keys and keeps a QWERTY owner sounding', async ({ page }) => {
+  await observeAudio(page);
+  await page.keyboard.down('y');
+  const a = await page.locator('.piano_keys .key_69').boundingBox();
+  const b = await page.locator('.piano_keys .key_71').boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height * .85);
+  await page.mouse.down();
+  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(1);
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height * .85, { steps: 4 });
+  await expect(page.locator('.piano_keys .key_69')).toHaveClass(/key_active/);
+  await expect(page.locator('.piano_keys .key_71')).toHaveClass(/key_active/);
+  await page.mouse.up();
+  await expect(page.locator('.piano_keys .key_71')).not.toHaveClass(/key_active/);
+  await expect(page.locator('.piano_keys .key_69')).toHaveClass(/key_active/);
+  await page.keyboard.up('y');
+  await expect(page.locator('.key_active')).toHaveCount(0);
+});
+
+test('piano keyboard navigation plays Space and isolates QWERTY typing', async ({ page }) => {
+  await observeAudio(page);
+  const key = page.locator('.piano_keys .key_60');
+  await key.focus();
+  await page.keyboard.press('y');
+  expect(await page.evaluate(() => window.audioCalls.starts)).toBe(0);
+  await page.keyboard.down('Space');
+  await expect(key).toHaveClass(/key_active/);
+  await page.keyboard.up('Space');
+  await expect(key).not.toHaveClass(/key_active/);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.piano_keys .key_61')).toBeFocused();
+});
+
+test('two piano touch owners of one pitch release independently', async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true });
+  const page = await context.newPage();
+  await page.goto('./');
+  await observeAudio(page);
+  const client = await context.newCDPSession(page);
+  const box = await page.locator('.piano_keys .key_69').boundingBox();
+  const point = { x: box.x + box.width / 2, y: box.y + box.height * .85 };
+  const first = { ...point, id: 1 };
+  const second = { ...point, id: 2, x: point.x + 1 };
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first, second] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [second] });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 0 });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  expect(await page.evaluate(() => window.audioCalls)).toEqual({ starts: 1, releases: 1 });
+  await context.close();
+});

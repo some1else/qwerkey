@@ -14,14 +14,3 @@ export function ComputerKeyboard({ state, onPointerDown }: Props) {
     })}</div>
   )}</div>;
 }
-export function PianoKeyboard({ state, onPointerDown }: Props) {
-  return <div className="piano_scroll" role="region" aria-label="Piano keyboard, scroll horizontally below the keys" tabIndex={0}>
-    <div className="keys piano_keys" onPointerDown={onPointerDown}>{Array.from({length: 56}, (_, index) => {
-      const pitch = index + 41;
-      const mapping = mappings.find(key => key.noteNumber === pitch);
-      const color = [1,3,6,8,10].includes(pitch % 12) ? 'black_key raised_key' : 'white_key';
-      const classes = mapping ? `key_${mapping.x}_${mapping.y} ${mapping.colorClass}` : color;
-      return <span key={pitch} data-pitch={pitch} className={`key ${classes} key_${pitch} ${state.active.has(pitch) ? 'key_active' : ''}`} />;
-    })}</div>
-  </div>;
-}

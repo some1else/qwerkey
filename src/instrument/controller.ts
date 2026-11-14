@@ -1,10 +1,14 @@
-import { createSynth, type SynthParameters } from '../audio';
+import { createSynth, defaultParameters, type SynthParameters } from '../audio';
 import { mappings, type KeyMapping } from '../layout';
 import { createMidi, type MidiPorts } from '../midi';
+
+import { validParameters } from './parameters';
 
 export type Mode = 'audio' | 'midi';
 export interface HeldNote { pitch: number; mapping?: KeyMapping }
 export interface Snapshot {
+  interaction: number;
+  parameters: Readonly<SynthParameters>;
   mode: Mode;
   enabled: boolean;
   busy: boolean;
@@ -15,6 +19,8 @@ export interface Snapshot {
   ports: MidiPorts;
 }
 export const initialSnapshot: Snapshot = {
+  interaction: 0,
+  parameters: { ...defaultParameters },
   mode: 'audio', enabled: false, busy: false, error: false,
   active: new Set(), keys: new Set(), inactive: new Set(),
   ports: { inputs: [], outputs: [], inputId: '', outputId: '' },
@@ -76,7 +82,7 @@ export function createController() {
     for (const pitch of new Set(Array.from(held.values(), note => note.pitch))) send(pitch, false);
     held.clear(); incoming.clear();
     timers.forEach(clearTimeout); timers.clear();
-    publish({ active: new Set(), keys: new Set(), inactive: new Set() });
+    publish({ interaction: state.interaction + 1, active: new Set(), keys: new Set(), inactive: new Set() });
   }
   return {
     getSnapshot: () => state,
@@ -110,7 +116,13 @@ export function createController() {
       midi.setEnabled(mode === 'midi');
       if (mode === 'midi') connection ??= midi.connect();
     },
-    setParameters: (parameters: Partial<SynthParameters>) => synth.setParameters(parameters),
+    setParameters(next: Partial<SynthParameters>) {
+      if (disposed || !validParameters(next)) return;
+      if (Object.entries(next).every(([key, value]) => state.parameters[key as keyof SynthParameters] === value)) return;
+      const parameters = { ...state.parameters, ...next };
+      synth.setParameters(next);
+      publish({ parameters });
+    },
     selectInput: midi.selectInput,
     selectOutput: midi.selectOutput,
     dispose() {

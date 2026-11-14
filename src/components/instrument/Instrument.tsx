@@ -2,9 +2,10 @@ import type { PointerEvent } from 'react';
 import { mappings } from '../../layout';
 import { useInstrument } from '../../hooks/useInstrument';
 import type { Mode } from '../../instrument/controller';
+import PianoKeyboard from './PianoKeyboard';
 import AudioParameters from './AudioParameters';
 import MidiPorts from './MidiPorts';
-import { ComputerKeyboard, PianoKeyboard } from './Keyboards';
+import { ComputerKeyboard } from './Keyboards';
 export default function Instrument() {
   const { state, ready, safari, controller, instrument, focus } = useInstrument();
   function selectMode(mode: Mode) {
@@ -33,8 +34,8 @@ export default function Instrument() {
         <button id="midi-mode" type="button" aria-pressed={state.mode === 'midi'} aria-disabled={safari || undefined} onClick={() => selectMode('midi')}>MIDI</button>
       </div>
       <ComputerKeyboard state={state} onPointerDown={pointerDown} />
-      <PianoKeyboard state={state} onPointerDown={pointerDown} />
-      <div className="sound_controls"><AudioParameters hidden={state.mode !== 'audio'} controller={controller.current} /><MidiPorts state={state} controller={controller.current} /></div>
+      <PianoKeyboard key={state.interaction} state={state} controller={controller.current} />
+      <div className="sound_controls"><AudioParameters parameters={state.parameters} hidden={state.mode !== 'audio'} controller={controller.current} /><MidiPorts state={state} controller={controller.current} /></div>
     </div>
   </>;
 }
