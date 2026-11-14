@@ -12,14 +12,14 @@ test.beforeAll(async () => {
   }
 });
 
-test('adds a quiet stereo hall tail after the dry sound', async ({ page }) => {
+test('keeps default effects subtle and makes maximum settings crunchy and flooded', async ({ page }) => {
   await page.addScriptTag({ content: harness });
   const results = await page.evaluate(async () => {
     const NativeAudioContext = window.AudioContext;
     const nativeConnect = AudioNode.prototype.connect;
     const results = [];
     try {
-      for (const enabled of [false, true]) {
+      for (const enabled of [false, true, 'flooded', 'crunch']) {
         const context = new OfflineAudioContext(2, 48000 * 3, 48000);
         Object.defineProperty(context, 'state', { get: () => 'running' });
         context.resume = async () => {};
@@ -29,14 +29,17 @@ test('adds a quiet stereo hall tail after the dry sound', async ({ page }) => {
           edges.push([this, destination]);
           return nativeConnect.call(this, destination, ...args);
         };
-        await audioHarness.createSynth().enable();
+        const synth = audioHarness.createSynth();
+        synth.setParameters({ warmth: enabled === 'crunch' ? 100 : 25, space: enabled === 'flooded' ? 100 : 25 });
+        await synth.enable();
         AudioNode.prototype.connect = nativeConnect;
         const hall = edges.find(([from]) => from instanceof ConvolverNode)[0];
-        if (!enabled) hall.disconnect();
+        if (!enabled || enabled === 'crunch') hall.disconnect();
         const ceiling = edges.find(([, to]) => to === context.destination)[0];
         const clip = edges.find(([, to]) => to === ceiling)[0];
         const limiter = edges.find(([, to]) => to === clip)[0];
-        const master = edges.find(([, to]) => to === limiter)[0];
+        const compensation = edges.find(([, to]) => to === limiter)[0];
+        const master = edges.find(([, to]) => to === compensation)[0];
         const source = context.createBufferSource();
         source.buffer = context.createBuffer(2, 4800, 48000);
         for (let i = 0; i < 4800; i++) {
@@ -48,7 +51,17 @@ test('adds a quiet stereo hall tail after the dry sound', async ({ page }) => {
         const energy = (start, end) => [0, 1].map(channel =>
           buffer.getChannelData(channel).slice(start * 48000, end * 48000)
             .reduce((sum, sample) => sum + sample * sample, 0));
-        results.push({ direct: energy(0, 0.2), tail: energy(0.3, 1.3), late: energy(2, 3) });
+        const harmonic = frequency => {
+          let real = 0, imaginary = 0;
+          const samples = buffer.getChannelData(0);
+          for (let i = 4320; i < 6720; i++) {
+            const phase = 2 * Math.PI * frequency * i / 48000;
+            real += samples[i] * Math.cos(phase);
+            imaginary += samples[i] * Math.sin(phase);
+          }
+          return Math.hypot(real, imaginary);
+        };
+        results.push({ direct: energy(0, 0.2), tail: energy(0.3, 1.3), late: energy(2, 3), harmonicRatio: harmonic(1320) / harmonic(440) });
       }
     } finally {
       window.AudioContext = NativeAudioContext;
@@ -56,13 +69,68 @@ test('adds a quiet stereo hall tail after the dry sound', async ({ page }) => {
     }
     return results;
   });
-  const [dry, wet] = results;
+  const [dry, wet, flooded, crunch] = results;
+  expect(crunch.harmonicRatio).toBeGreaterThan(0.05);
+  expect(crunch.harmonicRatio).toBeGreaterThan(dry.harmonicRatio * 3);
   for (const channel of [0, 1]) {
     expect(dry.tail[channel]).toBeLessThan(1e-10);
     expect(wet.tail[channel]).toBeGreaterThan(1e-6);
     expect(wet.tail[channel]).toBeLessThan(wet.direct[0] * 0.05);
     expect(wet.late[channel]).toBeLessThan(wet.tail[channel] * 0.01);
+    expect(flooded.tail[channel]).toBeGreaterThan(wet.tail[channel] * 10);
   }
+});
+
+test('measures Warmth loudness across waveforms and chord sizes', async ({ page }, testInfo) => {
+  await page.addScriptTag({ content: harness });
+  const measurements = await page.evaluate(async () => {
+    const Native = window.AudioContext;
+    const results = [];
+    try {
+      for (const oscillator of ['triangle', 'square']) {
+        for (const pitches of [[60], [48, 52, 55]]) {
+          for (const warmth of [0, 25, 50, 75, 100]) {
+            const context = new OfflineAudioContext(2, 48000 * 3, 48000);
+            Object.defineProperty(context, 'state', { get: () => 'running' });
+            context.resume = async () => {};
+            window.AudioContext = function () { return context; };
+            const synth = audioHarness.createSynth();
+            synth.setParameters({ oscillator, warmth });
+            await synth.enable();
+            pitches.forEach(pitch => synth.play(pitch, 440 * 2 ** ((pitch - 69) / 12)));
+            const buffer = await context.startRendering();
+            let energy = 0;
+            for (let channel = 0; channel < 2; channel++) {
+              for (const sample of buffer.getChannelData(channel).subarray(96000)) energy += sample * sample;
+            }
+            results.push({ oscillator, voices: pitches.length, warmth, rms: Math.sqrt(energy / 96000) });
+          }
+        }
+      }
+    } finally { window.AudioContext = Native; }
+    return results;
+  });
+  await testInfo.attach('warmth-loudness', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
+  const endDifferences = [];
+  for (const oscillator of ['triangle', 'square']) {
+    for (const voices of [1, 3]) {
+      const rows = measurements.filter(row => row.oscillator === oscillator && row.voices === voices);
+      const reference = rows.find(row => row.warmth === 0).rms;
+      for (const row of rows) {
+        const difference = 20 * Math.log10(row.rms / reference);
+        // Timbre and chord density affect perceived loudness, but the whole
+        // sweep should remain within a modest range instead of a large boost.
+        expect(difference, JSON.stringify(row)).toBeLessThan(6);
+        if (row.warmth === 100) {
+          expect(difference).toBeGreaterThan(-1);
+          endDifferences.push(difference);
+        }
+      }
+    }
+  }
+  const meanDifference = endDifferences.reduce((sum, value) => sum + value, 0) / endDifferences.length;
+  expect(meanDifference).toBeGreaterThan(2);
+  expect(meanDifference).toBeLessThan(4);
 });
 
 for (const sampleRate of [44100, 48000]) {
@@ -74,7 +142,7 @@ for (const sampleRate of [44100, 48000]) {
       const nativeConnect = AudioNode.prototype.connect;
       try {
         for (const oscillator of ['sine', 'triangle', 'sawtooth', 'square']) {
-          for (const profile of ['chord', 'coherent-low', 'coherent-high', 'resonant']) {
+          for (const profile of ['chord', 'coherent-low', 'coherent-high', 'resonant', 'wild']) {
             // Three stereo taps: submix, post-compressor makeup, final output.
             const context = new OfflineAudioContext(6, sampleRate * 3, sampleRate);
             Object.defineProperty(context, 'state', { get: () => 'running' });
@@ -90,9 +158,10 @@ for (const sampleRate of [44100, 48000]) {
               voices: 6, oscillator,
               ...(profile === 'chord' ? {} : {
                 attack: 0, decay: 0, sustain: 0,
-                frequency: profile === 'resonant' ? 440 : 20000,
-                resonance: profile === 'resonant' ? 30 : 0.7,
+                frequency: ['resonant', 'wild'].includes(profile) ? 440 : 20000,
+                resonance: ['resonant', 'wild'].includes(profile) ? 30 : 0.7,
               }),
+              ...(profile === 'wild' ? { warmth: 100, space: 100 } : {}),
             });
             await synth.enable();
             const pitches = profile === 'chord' ? [41, 45, 48, 52, 55, 60]
@@ -103,7 +172,8 @@ for (const sampleRate of [44100, 48000]) {
             const ceiling = edges.find(([, to]) => to === context.destination)[0];
             const softClip = edges.find(([, to]) => to === ceiling)[0];
             const limiter = edges.find(([, to]) => to === softClip)[0];
-            const master = edges.find(([, to]) => to === limiter)[0];
+            const compensation = edges.find(([, to]) => to === limiter)[0];
+            const master = edges.find(([, to]) => to === compensation)[0];
             const compressor = edges.find(([, to]) => to === master)[0];
             const submix = edges.find(([, to]) => to === compressor)[0];
             ceiling.disconnect(context.destination);
@@ -145,7 +215,7 @@ for (const sampleRate of [44100, 48000]) {
     }
     for (const measurement of measurements) {
       expect(measurement.finite, JSON.stringify(measurement)).toBe(true);
-      if (measurement.profile !== 'resonant') {
+      if (!['resonant', 'wild'].includes(measurement.profile)) {
         // At least 3 dB of raw submix headroom, including oscillator/filter
         // overshoot, without relying on compression or the output ceiling.
         expect(measurement.peaks[0], JSON.stringify(measurement)).toBeLessThan(10 ** (-3 / 20));

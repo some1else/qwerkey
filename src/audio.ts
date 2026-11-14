@@ -7,11 +7,31 @@ export interface SynthParameters {
   release: number;
   frequency: number;
   resonance: number;
+  warmth: number;
+  space: number;
+}
+
+// Keep the original sound at 25%, with a wider range above that reference.
+const effectReference = 25;
+
+function effectAmount(percent: number, original: number, maximum: number): number {
+  return percent <= effectReference
+    ? original * percent / effectReference
+    : original + (maximum - original) * (percent - effectReference) / (100 - effectReference);
+}
+
+function warmthOutputGain(percent: number): number {
+  // Match the driven bus to its dry level while retaining a small loudness
+  // lift. Interpolate gain in dB; leave the original 25% sound unchanged.
+  const gains = [1, 1, 0.6, 0.14, 0.04];
+  const position = Math.max(0, Math.min(100, percent)) / 25;
+  const index = Math.min(3, Math.floor(position));
+  return gains[index]! * (gains[index + 1]! / gains[index]!) ** (position - index);
 }
 
 export const defaultParameters: SynthParameters = {
   oscillator: 'triangle', voices: 8, attack: 9, decay: 1800, sustain: -12,
-  release: 2200, frequency: 440, resonance: 0.7,
+  release: 2200, frequency: 440, resonance: 0.7, warmth: effectReference, space: effectReference,
 };
 
 interface Voice {
@@ -78,7 +98,7 @@ function saturationCurve(): Float32Array<ArrayBuffer> {
   return curve;
 }
 
-function createMixer(context: AudioContext): GainNode {
+function createMixer(context: AudioContext, parameters: SynthParameters) {
   const mixer = context.createGain();
   mixer.gain.value = submixGain;
 
@@ -116,16 +136,20 @@ function createMixer(context: AudioContext): GainNode {
 
   mixer.connect(compressor);
   compressor.connect(makeup);
-  makeup.connect(limiter);
-  // A subtle parallel saturation send on the shared mix, alongside reverb.
+  const warmthCompensation = context.createGain();
+  makeup.connect(warmthCompensation);
+  warmthCompensation.connect(limiter);
+  // Parallel saturation: unity drive at the default, up to +30 dB for crunch.
+  const saturationDrive = context.createGain();
   const saturation = context.createWaveShaper();
   saturation.curve = saturationCurve();
   saturation.oversample = '4x';
   const saturationReturn = context.createGain();
   saturationReturn.gain.value = 0.06;
-  makeup.connect(saturation);
+  makeup.connect(saturationDrive);
+  saturationDrive.connect(saturation);
   saturation.connect(saturationReturn);
-  saturationReturn.connect(limiter);
+  saturationReturn.connect(warmthCompensation);
   // A quiet, dark hall return alongside the dry master. Both paths pass
   // through the output protection, and the dry attack stays immediate.
   const reverbHighpass = context.createBiquadFilter();
@@ -148,11 +172,23 @@ function createMixer(context: AudioContext): GainNode {
   reverbHighpass.connect(reverbLowpass);
   reverbLowpass.connect(hall);
   hall.connect(wet);
-  wet.connect(limiter);
+  wet.connect(warmthCompensation);
   limiter.connect(softClip);
   softClip.connect(ceiling);
   ceiling.connect(context.destination);
-  return mixer;
+  function setParameters(parameters: SynthParameters, smooth = true) {
+    for (const [param, value] of [
+      [warmthCompensation.gain, warmthOutputGain(parameters.warmth)],
+      [saturationDrive.gain, 10 ** (effectAmount(parameters.warmth, 0, 30) / 20)],
+      [saturationReturn.gain, effectAmount(parameters.warmth, 0.06, 1)],
+      [wet.gain, effectAmount(parameters.space, 0.1, 6)],
+    ] as const) {
+      if (smooth) param.setTargetAtTime(value, context.currentTime, 0.015);
+      else param.value = value;
+    }
+  }
+  setParameters(parameters, false);
+  return { input: mixer, setParameters };
 }
 
 function startVoice(context: AudioContext, output: AudioNode, frequency: number, settings: SynthParameters, onEnded: () => void, velocity = 64): Voice {
@@ -169,17 +205,20 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
   const rootNote = 69 + 12 * Math.log2(frequency / 440);
   // Spread the visible piano (MIDI 41–96) across the stereo field, clamping
   // notes received outside that range to the nearest edge.
-  panner.pan.value = Math.max(-1, Math.min(1, (rootNote - 68.5) / 27.5));
+  const keyboardPan = Math.max(-1, Math.min(1, (rootNote - 68.5) / 27.5));
+  panner.pan.value = keyboardPan * Math.min(1, settings.space / effectReference);
   const gain = context.createGain();
   const now = context.currentTime;
   // A/D/R are milliseconds; S is amplitude in dB relative to the attack peak.
   const attack = settings.attack / 1000;
   const decay = settings.decay / 1000;
   const release = settings.release / 1000;
-  // Reduce the upper register by 3 dB per octave above A4, up to 12 dB.
-  // Apply it to the whole envelope so velocity and sustain stay proportional.
+  // At 25% Warmth, reduce the upper register by 3 dB/octave, up to 12 dB.
+  // A separate gain lets Warmth change smoothly without rewriting the ADSR.
   const highNoteDb = Math.min(12, Math.max(0, rootNote - 69) * 3 / 12);
-  const volume = voiceLevel * velocity / 64 * 10 ** (-highNoteDb / 20);
+  const tone = context.createGain();
+  tone.gain.value = 10 ** (-highNoteDb * settings.warmth / effectReference / 20);
+  const volume = voiceLevel * velocity / 64;
   const sustain = volume * 10 ** (settings.sustain / 20);
   // Tiny offsets keep zero-duration envelope stages ordered.
   const points = [
@@ -192,18 +231,39 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
 
   const filter = context.createBiquadFilter();
   filter.type = 'lowpass';
+  let space = settings.space;
+  let warmth = settings.warmth;
+  let spaceChanged = false;
   function tune(parameters: SynthParameters) {
     for (const { oscillator } of oscillators) oscillator.type = parameters.oscillator;
     // 440 is unity key tracking: every voice follows its own root frequency.
     filter.frequency.setValueAtTime(Math.min(context.sampleRate / 2, frequency * parameters.frequency / 440), context.currentTime);
     // Lowpass Q is expressed in dB by Web Audio; expose traditional linear Q.
     filter.Q.setValueAtTime(20 * Math.log10(parameters.resonance), context.currentTime);
+    if (parameters.warmth !== warmth) {
+      warmth = parameters.warmth;
+      tone.gain.setTargetAtTime(10 ** (-highNoteDb * warmth / effectReference / 20), context.currentTime, 0.015);
+    }
+    if (parameters.space !== space) {
+      space = parameters.space;
+      spaceChanged = true;
+      const time = context.currentTime;
+      panner.pan.setTargetAtTime(keyboardPan * Math.min(1, space / effectReference), time, 0.015);
+      for (const { oscillator, direction } of oscillators) {
+        oscillator.frequency.cancelAndHoldAtTime(time);
+        if (time < points[1]!.time) oscillator.frequency.setValueAtTime(frequency, points[1]!.time);
+        oscillator.frequency.exponentialRampToValueAtTime(
+          frequency * 2 ** (direction * effectAmount(space, 5, 25) / 1200),
+          Math.max(time + 0.015, points[2]!.time));
+      }
+    }
   }
   tune(settings);
   for (const { oscillator } of oscillators) oscillator.connect(unison);
   unison.connect(filter);
   filter.connect(gain);
-  gain.connect(panner);
+  gain.connect(tone);
+  tone.connect(panner);
   panner.connect(output);
   let ended = false;
   let releasing = false;
@@ -216,13 +276,14 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
       unison.disconnect();
       filter.disconnect();
       gain.disconnect();
+      tone.disconnect();
       panner.disconnect();
       onEnded();
     };
     oscillator.start(now);
     // Stay in unison through attack, then spread over the ADSR decay.
     oscillator.frequency.setValueAtTime(frequency, points[1]!.time);
-    oscillator.frequency.exponentialRampToValueAtTime(frequency * 2 ** (direction * 5 / 1200), points[2]!.time);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * 2 ** (direction * effectAmount(space, 5, 25) / 1200), points[2]!.time);
   }
 
   return {
@@ -258,8 +319,10 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
         // Early note-off continues from the current decay detuning.
         // Frequency stays positive for exponential ramps in either direction.
         oscillator.frequency.cancelAndHoldAtTime(time);
-        oscillator.frequency.setValueAtTime(frequency * 2 ** (direction * 5 * decayProgress / 1200), time);
-        oscillator.frequency.exponentialRampToValueAtTime(frequency * 2 ** (direction * 10 / 1200), time + release);
+        if (!spaceChanged) {
+          oscillator.frequency.setValueAtTime(frequency * 2 ** (direction * effectAmount(space, 5, 25) * decayProgress / 1200), time);
+        }
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 2 ** (direction * effectAmount(space, 10, 25) / 1200), time + release);
         oscillator.stop(time + release);
       }
     },
@@ -269,7 +332,7 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
 export function createSynth() {
   let parameters = { ...defaultParameters };
   let context: AudioContext | undefined;
-  let mixer: GainNode | undefined;
+  let mixer: ReturnType<typeof createMixer> | undefined;
   const heldNotes = new Map<number, Voice>();
   const activeVoices = new Set<Voice>();
   let disposed = false;
@@ -291,7 +354,7 @@ export function createSynth() {
     if (disposed) return;
     if (!context) {
       context = createContext();
-      mixer = createMixer(context);
+      mixer = createMixer(context, parameters);
     }
     await context.resume();
     if (disposed) return;
@@ -301,7 +364,7 @@ export function createSynth() {
   function play(key: number, frequency: number, velocity = 64) {
     if (!context || !mixer || context.state !== 'running' || heldNotes.has(key)) return;
     while (activeVoices.size >= parameters.voices) stealOldest();
-    const voice = startVoice(context, mixer, frequency, { ...parameters }, () => activeVoices.delete(voice), velocity);
+    const voice = startVoice(context, mixer.input, frequency, { ...parameters }, () => activeVoices.delete(voice), velocity);
     activeVoices.add(voice);
     heldNotes.set(key, voice);
   }
@@ -314,6 +377,7 @@ export function createSynth() {
   function setParameters(next: Partial<SynthParameters>) {
     if (next.voices !== undefined && (!Number.isInteger(next.voices) || next.voices < 1 || next.voices > 32)) return;
     parameters = { ...parameters, ...next };
+    mixer?.setParameters(parameters);
     while (activeVoices.size > parameters.voices) stealOldest();
     for (const voice of heldNotes.values()) voice.tune(parameters);
   }

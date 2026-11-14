@@ -10,9 +10,32 @@ latency hint were already configured; this change adds submix headroom and
 repeatable measurements.
 
 A second parallel send from master makeup adds symmetric tanh saturation with
-1.5 drive and 4× oversampling. Its return gain is 0.06, keeping the saturation
+1.5 drive and 4× oversampling. Its default return gain is 0.06, keeping the saturation
 subtle. The dry mix, saturation return, and hall return all meet before the
 limiter and sample ceiling.
+
+Warmth (%) scales the saturation return from 0 to 1; Space (%) scales the
+hall return from 0 to 6 and the unison spread from zero to ±25 cents during
+both decay and release. Both default to 25%, reproducing the original return
+levels and ±5/±10-cent unison. Each amount scales linearly to its original
+value at 25%, then linearly to its maximum at 100%. Return levels use a 15 ms
+smoothing time constant. Saturation input drive stays at unity through 25%,
+then rises to +30 dB at 100% for a crunchy sound; maximum reverb is wet-dominant.
+
+Space also scales the keyboard pan: 0% centers every note, 25% preserves the
+original left/right spread, and higher settings retain that spread.
+Warmth scales high-note attenuation in dB: 0% disables it, 25% applies the
+original 3 dB/octave above A4 (12 dB cap), and 100% quadruples those values.
+Pan and attenuation changes use the same smoothing while notes are held.
+
+Warmth also applies a calibrated output trim after summing the dry signal,
+saturation, and reverb, before the limiter. Drive remains unchanged so the
+crunch survives level matching. The trim stays at unity through the 25%
+default, then reaches 0.6, 0.14, and 0.04 at 50%, 75%, and 100%, interpolated
+in dB and smoothed. Steady-state triangle/square single-note and chord renders
+measure a mean 2.4 dB rise from 0% to 100%, targeting roughly 3 dB of perceived
+change. Individual notes and envelopes vary; this is calibrated gain
+compensation rather than automatic loudness normalization.
 
 Voice gain remains `1 / 12` at MIDI velocity 64. Six coherent voices at velocity
 127 nearly reach full scale: the baseline measured peak was −0.07 dBFS. Submix

@@ -28,6 +28,11 @@ async function openSynth(page) {
     };
     // Offline contexts do not apply automation until rendering starts.
     window.parameterValues = new WeakMap();
+    const setTarget = AudioParam.prototype.setTargetAtTime;
+    AudioParam.prototype.setTargetAtTime = function (value, ...args) {
+      window.parameterValues.set(this, value);
+      return setTarget.call(this, value, ...args);
+    };
     const setValue = AudioParam.prototype.setValueAtTime;
     AudioParam.prototype.setValueAtTime = function (value, time) {
       window.parameterValues.set(this, value);
@@ -40,6 +45,15 @@ async function openSynth(page) {
     };
     const connect = AudioNode.prototype.connect;
     AudioNode.prototype.connect = function (destination, ...args) {
+      if (this instanceof GainNode && destination instanceof WaveShaperNode) window.saturationDrive = this.gain;
+      if (destination instanceof StereoPannerNode && this instanceof GainNode) {
+        window.voiceTone = this.gain;
+        window.voicePan = destination.pan;
+      }
+      if (destination instanceof GainNode) {
+        if (this instanceof ConvolverNode) window.reverbReturn = destination.gain;
+        if (this instanceof WaveShaperNode) window.saturationReturn = destination.gain;
+      }
       if (this instanceof BiquadFilterNode && destination instanceof GainNode) {
         window.filters.push(this);
         window.voiceGain = destination.gain;
@@ -127,6 +141,50 @@ test('uses the requested defaults and holds sustain at relative dB until release
   expect(result.release.time).toBeCloseTo(122.2);
   expect(result.release.value).toBe(.0001);
   expect(result.gain).toBeCloseTo((1 / 12) * 10 ** (-12 / 20), 6);
+});
+
+test('warmth and space scale the effect returns and held unison, and reset to the current sound', async ({ page }) => {
+  await openSynth(page);
+  for (const id of ['warmth', 'space']) await expect(page.locator(`#${id} input`)).toHaveValue('25');
+  const returns = () => page.evaluate(() => [window.saturationReturn, window.reverbReturn]
+    .map(param => window.parameterValues.get(param) ?? param.value));
+  expect(await returns()).toEqual([expect.closeTo(0.06, 5), expect.closeTo(0.1, 5)]);
+  const drive = () => page.evaluate(() => window.parameterValues.get(window.saturationDrive) ?? window.saturationDrive.value);
+  expect(await drive()).toBeCloseTo(1, 5);
+  await pressPiano(page, 69);
+  await setKnob(page, 'warmth', '0');
+  await setKnob(page, 'space', '0');
+  expect(await returns()).toEqual([0, 0]);
+  expect(await page.evaluate(() => window.detuneRamps.slice(-2).map(ramp => ramp.value))).toEqual([0, 0]);
+  await setKnob(page, 'warmth', '100');
+  await setKnob(page, 'space', '100');
+  expect(await returns()).toEqual([expect.closeTo(1, 5), expect.closeTo(6, 5)]);
+  expect(await drive()).toBeCloseTo(10 ** (30 / 20), 4);
+  const spread = await page.evaluate(() => window.detuneRamps.slice(-2).map(ramp => ramp.value));
+  expect(spread[0]).toBeCloseTo(-25, 5);
+  expect(spread[1]).toBeCloseTo(25, 5);
+  await page.locator('.piano_keys .key_69').dispatchEvent('pointerup', { pointerId: 69 });
+  const releaseSpread = await page.evaluate(() => window.detuneRamps.slice(-2).map(ramp => ramp.value));
+  expect(releaseSpread[0]).toBeCloseTo(-25, 5);
+  expect(releaseSpread[1]).toBeCloseTo(25, 5);
+  for (const id of ['warmth', 'space']) await page.locator(`#${id} .knob_control`).dblclick();
+  expect(await returns()).toEqual([expect.closeTo(0.06, 5), expect.closeTo(0.1, 5)]);
+});
+
+test('warmth scales high-note attenuation and space scales held-note pan', async ({ page }) => {
+  await openSynth(page);
+  await pressPiano(page, 93);
+  const voice = () => page.evaluate(() => [window.voiceTone, window.voicePan]
+    .map(param => window.parameterValues.get(param) ?? param.value));
+  expect(await voice()).toEqual([expect.closeTo(10 ** (-6 / 20), 5), expect.closeTo(24.5 / 27.5, 5)]);
+  await setKnob(page, 'warmth', '0');
+  await setKnob(page, 'space', '0');
+  expect(await voice()).toEqual([1, 0]);
+  await setKnob(page, 'warmth', '100');
+  await setKnob(page, 'space', '100');
+  expect(await voice()).toEqual([expect.closeTo(10 ** (-24 / 20), 5), expect.closeTo(24.5 / 27.5, 5)]);
+  for (const id of ['warmth', 'space']) await page.locator(`#${id} .knob_control`).dblclick();
+  expect(await voice()).toEqual([expect.closeTo(10 ** (-6 / 20), 5), expect.closeTo(24.5 / 27.5, 5)]);
 });
 
 test('converts edited sustain dB to amplitude and releases during attack', async ({ page }) => {
@@ -240,10 +298,10 @@ test('sustain knob supports decimal values and updates the native envelope', asy
   await page.keyboard.up('y');
 });
 
-test('uses eight knobs with labels below and ADSR on the bottom row', async ({ page }) => {
+test('uses ten knobs with labels below and ADSR on the bottom row', async ({ page }) => {
   await openSynth(page);
   const controls = page.getByRole('group', { name: 'Audio parameters' });
-  await expect(controls.getByRole('slider')).toHaveCount(8);
+  await expect(controls.getByRole('slider')).toHaveCount(10);
   await expect(controls.locator('input[type="number"], select, .parameter_fader')).toHaveCount(0);
   const layout = await controls.locator('.audio_parameter').evaluateAll(items => items.map(item => ({
     id: item.id,
@@ -251,10 +309,10 @@ test('uses eight knobs with labels below and ADSR on the bottom row', async ({ p
     knobBottom: item.querySelector('.knob_control').getBoundingClientRect().bottom,
     labelTop: item.querySelector('.parameter_label').getBoundingClientRect().top,
   })));
-  expect(layout.map(item => item.id)).toEqual(['oscillator', 'voices', 'frequency', 'resonance', 'attack', 'decay', 'sustain', 'release']);
-  expect(new Set(layout.slice(0, 4).map(item => item.y)).size).toBe(1);
-  expect(new Set(layout.slice(4).map(item => item.y)).size).toBe(1);
-  expect(layout[4].y).toBeGreaterThan(layout[0].y);
+  expect(layout.map(item => item.id)).toEqual(['oscillator', 'frequency', 'resonance', 'warmth', 'space', 'voices', 'attack', 'decay', 'sustain', 'release']);
+  expect(new Set(layout.slice(0, 5).map(item => item.y)).size).toBe(1);
+  expect(new Set(layout.slice(5).map(item => item.y)).size).toBe(1);
+  expect(layout[5].y).toBeGreaterThan(layout[0].y);
   for (const item of layout) expect(item.labelTop).toBeGreaterThanOrEqual(item.knobBottom);
   const oscillator = page.getByRole('slider', { name: 'Oscillator', exact: true });
   await oscillator.focus();
