@@ -44,16 +44,17 @@ export function useInstrument() {
     const down = (event: KeyboardEvent) => keyboard(event, true);
     const up = (event: KeyboardEvent) => keyboard(event, false);
     const release = (event: PointerEvent) => runtime.release(`pointer:${event.pointerId}`);
-    const visibility = () => { if (document.hidden) runtime.releaseAll(); };
+    const releaseLive = () => runtime.releaseLive();
+    const visibility = () => { if (document.hidden) releaseLive(); };
     document.addEventListener('keydown', down); document.addEventListener('keyup', up);
     for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) document.addEventListener(name, release);
-    window.addEventListener('blur', runtime.releaseAll); window.addEventListener('pagehide', runtime.releaseAll);
+    window.addEventListener('blur', releaseLive); window.addEventListener('pagehide', runtime.releaseAll);
     document.addEventListener('visibilitychange', visibility);
     return () => {
       unsubscribe(); cancelAnimationFrame(frame); controller.current = null;
       document.removeEventListener('keydown', down); document.removeEventListener('keyup', up);
       for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) document.removeEventListener(name, release);
-      window.removeEventListener('blur', runtime.releaseAll); window.removeEventListener('pagehide', runtime.releaseAll);
+      window.removeEventListener('blur', releaseLive); window.removeEventListener('pagehide', runtime.releaseAll);
       document.removeEventListener('visibilitychange', visibility); runtime.dispose();
     };
   }, []);

@@ -191,6 +191,11 @@ export function createController() {
     releaseAll,
     releaseLive() {
       for (const [owner, note] of held) if (note.origin !== "playback") this.release(owner);
+      incoming.clear();
+      recording.finish();
+      timers.forEach(clearTimeout);
+      timers.clear();
+      publish({ interaction: state.interaction + 1, inactive: new Set() });
       this.releasePreview();
     },
     selectMode(mode: Mode) {

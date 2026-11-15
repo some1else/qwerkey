@@ -145,8 +145,8 @@ or an edge and use arrow keys for 0.01-second adjustments. Loop boundaries exten
 through the piano roll. The time range is independent of selected notes; a single
 click outside the loop clears it and places the playhead there. Space plays that range (or the whole buffer) in a loop; stopping returns to its beginning. Space toggles playback from the
 instrument background or note editor. Playback continues across application tabs,
-loop changes, note edits, and output changes; Space also works from the instrument background outside the editor. Playback and editor audition do not record themselves. Backgrounding
-the page stops playback and releases notes. Avoid routing a MIDI output back to
+loop changes, note edits, and output changes; Space also works from the instrument background outside the editor. Playback and editor audition do not record themselves. Switching browser tabs or minimizing
+the browser keeps playback running and releases held live notes. Leaving the page stops playback. Avoid routing a MIDI output back to
 the selected input, since external feedback is indistinguishable from live input.
 
 The Buffer toolbar provides Play loop, Stop, Clear buffer (with confirmation), Download, and Fit. Download saves selected notes first, otherwise the loop range, otherwise the entire buffer as MIDI. Fit trims unused trailing duration and frames the loop or buffer. The shared Output controls remain below both views. Audio parameters use two rows of four; Midi ports stack IN above OUT. Numeric fields support direct entry and keyboard adjustment without visible spinner arrows. Active notes, including buffer playback, highlight the computer keyboard.

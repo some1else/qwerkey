@@ -142,19 +142,12 @@ function RecordedBuffer({
       generation.current++;
       stopRef.current();
     };
-    const hidden = () => {
-      if (document.hidden) stop();
-    };
-    window.addEventListener("blur", stop);
     window.addEventListener("pagehide", stop);
-    document.addEventListener("visibilitychange", hidden);
     return () => {
       clearInterval(timer);
       stop();
       controller?.releasePreview();
-      window.removeEventListener("blur", stop);
       window.removeEventListener("pagehide", stop);
-      document.removeEventListener("visibilitychange", hidden);
     };
   }, [controller]);
   function stop() {

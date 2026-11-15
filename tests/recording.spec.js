@@ -658,6 +658,55 @@ test("incoming MIDI is recorded at the looping playhead even on a hidden editor"
 
 });
 
+for (const background of ["blur", "visibility"]) {
+  test(`playback keeps sounding and looping after ${background}, until Stop or pagehide`, async ({ page }) => {
+    await page.addInitScript(() => {
+      const input = { id: "in", name: "Test In", state: "connected" };
+      window.sent = [];
+      const output = { id: "out", name: "Test Out", state: "connected", send: data => window.sent.push(Array.from(data)) };
+      window.receive = data => input.onmidimessage({ data: new Uint8Array(data), receivedTime: performance.now() });
+      Object.defineProperty(navigator, "requestMIDIAccess", { value: async () => ({
+        inputs: new Map([["in", input]]), outputs: new Map([["out", output]]),
+      }) });
+    });
+    await page.goto("./");
+    await page.locator("#enabler").click();
+    await page.locator("#midi-mode").click();
+    await page.locator("#midi-input").selectOption("in");
+    await page.locator("#midi-output").selectOption("out");
+    await page.evaluate(() => window.receive([0x90, 60, 90]));
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => window.receive([0x80, 60, 64]));
+    await page.locator("#buffer-mode").click();
+    await edge(page, "end").fill("1.5");
+    await page.locator(".roll_viewport").focus();
+    await page.keyboard.press("Space");
+    const buffer = page.locator(".recorded_buffer");
+    await expect(buffer).toHaveAttribute("data-playing", "true");
+    await page.evaluate(background => {
+      window.sent = [];
+      if (background === "visibility") {
+        Object.defineProperty(document, "hidden", { configurable: true, value: true });
+        document.dispatchEvent(new Event("visibilitychange"));
+      } else window.dispatchEvent(new Event("blur"));
+    }, background);
+    // Losing focus must not cut off the note already sounding.
+    expect(await page.evaluate(() => window.sent)).toEqual([]);
+    await expect(buffer).toHaveAttribute("data-playing", "true");
+    await expect.poll(() => page.evaluate(() => window.sent.some(data => data[0] === 0x80 && data[1] === 60))).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.sent.some(data => data[0] === 0x90 && data[1] === 60))).toBe(true);
+    await page.keyboard.press("Space");
+    await expect(buffer).toHaveAttribute("data-playing", "false");
+    const stopped = await page.evaluate(() => window.sent.length);
+    await page.waitForTimeout(1600);
+    expect(await page.evaluate(() => window.sent.length)).toBe(stopped);
+    await page.keyboard.press("Space");
+    await expect(buffer).toHaveAttribute("data-playing", "true");
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+    await expect(buffer).toHaveAttribute("data-playing", "false");
+  });
+}
+
 test("synth plays a live overdub on subsequent passes without restarting", async ({ page }) => {
   await page.addInitScript(() => {
     window.frequencies = [];
