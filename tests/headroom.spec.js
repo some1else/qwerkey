@@ -174,8 +174,11 @@ for (const sampleRate of [44100, 48000]) {
             const limiter = edges.find(([, to]) => to === softClip)[0];
             const compensation = edges.find(([, to]) => to === limiter)[0];
             const master = edges.find(([, to]) => to === compensation)[0];
-            const compressor = edges.find(([, to]) => to === master)[0];
-            const submix = edges.find(([, to]) => to === compressor)[0];
+            const highShelf = edges.find(([, to]) => to === master)[0];
+            const lowShelf = edges.find(([, to]) => to === highShelf)[0];
+            const compressor = edges.find(([, to]) => to === lowShelf)[0];
+            const inputGain = edges.find(([, to]) => to === compressor)[0];
+            const submix = edges.find(([, to]) => to === inputGain)[0];
             ceiling.disconnect(context.destination);
             const merger = context.createChannelMerger(6);
             [submix, master, ceiling].forEach((node, index) => {

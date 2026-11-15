@@ -240,7 +240,7 @@ test('Audio and MIDI share a stable controls row above 667px', async ({ page }) 
   const layout = () => page.locator('.computer_keys, .piano_scroll, .sound_controls')
     .evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
   const audioLayout = await layout();
-  await expect(page.getByRole('slider')).toHaveCount(10);
+  await expect(page.getByRole('slider')).toHaveCount(15);
   await expect(page.getByRole('combobox')).toHaveCount(0);
   await page.locator('#midi-mode').click();
   await expect(page.getByRole('combobox')).toHaveCount(2);
@@ -253,7 +253,7 @@ test('Audio and MIDI share a stable controls row above 667px', async ({ page }) 
 
 test('defaults to Audio behind the splash and delays MIDI access', async ({ page }) => {
   await openApp(page, 'both', false);
-  await expect(page.locator('#audio-mode')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#audio-mode')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.overlay')).toBeVisible();
   await expect(page.locator('.midi_ports')).toBeHidden();
   await page.keyboard.press('y');
@@ -329,7 +329,7 @@ test('Safari blocks MIDI with an alert for pointer and keyboard activation', asy
   await page.keyboard.press('Enter');
   expect(alerts).toHaveLength(2);
   expect(alerts[0]).toContain('unavailable in Safari');
-  await expect(page.locator('#audio-mode')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#audio-mode')).toHaveAttribute('aria-selected', 'true');
   expect(await page.evaluate(() => window.midiRequests)).toBe(0);
 });
 

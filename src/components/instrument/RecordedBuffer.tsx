@@ -201,7 +201,12 @@ function RecordedBuffer({
     const cancel = startLoop(clipped, length, {
       startPosition: initial - bounds[0],
       on: (n) =>
-        controller.press(`playback:${n.id}`, { ...n, origin: "playback" }),
+        controller.press(`playback:${n.id}`, {
+          ...n, origin: "playback",
+          // Use the original arrangement start even when the loop clips a note.
+          arrangementTime: controller.recording.snapshot().find(note => note.id === n.id)?.start
+            ?? n.start + boundsRef.current[0],
+        }),
       off: (n) => controller.release(`playback:${n.id}`),
       position: (time) => {
         positionRef.current = boundsRef.current[0] + time;
@@ -224,7 +229,7 @@ function RecordedBuffer({
   }
 
   const selectedNotes = notes.filter(note => selection.includes(note.id));
-  const downloadLabel = selectedNotes.length ? "Download selected notes" : range ? "Download loop range" : "Download entire buffer";
+  const downloadLabel = selectedNotes.length ? "Download selected notes" : range ? "Download loop range" : "Download entire melody";
   function download() {
     const all = controller?.recording.snapshot() ?? [];
     const selected = all.filter(note => selection.includes(note.id));
@@ -235,7 +240,7 @@ function RecordedBuffer({
     const url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = selected.length ? "qwerkey-selection.mid" : range ? "qwerkey-range.mid" : "qwerkey-buffer.mid";
+    anchor.download = selected.length ? "qwerkey-selection.mid" : range ? "qwerkey-range.mid" : "qwerkey-melody.mid";
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -312,7 +317,7 @@ function RecordedBuffer({
   return (
     <section
       className="recorded_buffer"
-      aria-label="Recorded buffer"
+      aria-label="Recorded melody"
       data-note-count={notes.length}
       data-playing={playing}
       onKeyDownCapture={event => {
@@ -333,7 +338,7 @@ function RecordedBuffer({
       }}
     >
       {visible && <>
-      <div className="buffer_toolbar" role="group" aria-label="Buffer actions">
+      <div className="buffer_toolbar" role="group" aria-label="Melody actions">
         <div className="buffer_actions" role="group" aria-label="Transport">
           <button onClick={play} disabled={playing || !notes.length}>Play</button>
           <button onClick={stop} disabled={!playing}>Stop</button>
@@ -345,7 +350,7 @@ function RecordedBuffer({
         <span>{notes.length} notes · {extent.toFixed(2)} s</span>
       </div>
       <dialog ref={confirmation} aria-labelledby="clear-buffer-title" onClose={() => body.current?.focus()}>
-        <p id="clear-buffer-title">Clear the recorded buffer? This cannot be undone.</p>
+        <p id="clear-buffer-title">Clear the recorded melody? This cannot be undone.</p>
         <form method="dialog">
           <button autoFocus>Cancel</button>
           <button onClick={() => {

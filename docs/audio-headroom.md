@@ -1,6 +1,6 @@
 # Six-voice headroom
 
-The audio path is voice envelopes/panners → submix → bus compressor → master
+The audio path is voice envelopes/panners → submix → input gain → bus compressor → low shelf → high shelf → master
 makeup → limiter → soft clip → sample ceiling → destination. The AudioContext
 uses `latencyHint: 'interactive'` and the device sample rate. A parallel hall
 send branches from master makeup, filters to 180–4500 Hz, and returns through
@@ -75,3 +75,33 @@ for the specified scenarios, not a true-peak or exhaustive parameter sweep.
 Validation: `npm run build` and
 `npx playwright test tests/audio.spec.js tests/headroom.spec.js tests/parameters.spec.js --workers=2`
 (18 tests passed).
+
+## Additional sound controls
+
+Brightness defaults to 0% and balances a 400 Hz low shelf against a 2 kHz
+high shelf immediately after the bus compressor. At +100% their gains are
+−24 dB and +24 dB; at −100% they reverse. Gains are always equal and opposite.
+Native shelves provide smooth transitions (Q is unused for these filter types).
+Gain changes use 15 ms smoothing.
+
+Variance defaults to 0%. Each accepted internal-audio note-on consumes two independent
+samples from a seeded 32-bit LCG. The first adds `(random - 0.5) * variance / 100 * 127`
+to its velocity, clamped to 0–127. The second multiplies attack by
+`1 + (random - 0.5) * variance / 100 * 0.5`, ranging from 75% to 125% of
+the configured attack at 100% Variance. Zero attack stays zero; held notes
+retain their original envelope. The envelope uses a tiny positive floor for
+exponential automation. Seed defaults to 0, accepts integers 0–1000, and resets
+the live-note sequence when changed. Playback hashes the seed and original
+arrangement start (rounded to microseconds) before sampling velocity and attack.
+Each note therefore repeats its jitter across loops, seeks, and clipped loop
+boundaries, independent of live playing. Reverb diffusion uses its own independent seed.
+
+Transpose defaults to 0 and accepts integer semitones from −24 to +24.
+New notes start at the transposed pitch; held notes glide with 15 ms smoothing.
+The lowpass cutoff tracks transposed pitch. Existing unison automation, key
+ownership, keyboard pan, and MIDI output retain their original behavior.
+Decay now spans 0–5000 ms, with its default remaining 900 ms.
+
+Gain ranges from −12 to +12 dB in 0.1 dB steps, defaulting to 0 dB (unity).
+It applies immediately before the mix compressor, after the fixed submix trim,
+with 15 ms smoothing. This changes compressor drive as well as level.

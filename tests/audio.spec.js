@@ -44,14 +44,18 @@ for (const sampleRate of [44100, 48000]) {
       const limiter = edges.find(([, to]) => to === softClip)[0];
       const compensation = edges.find(([, to]) => to === limiter)[0];
       const makeup = edges.find(([, to]) => to === compensation)[0];
-      const compressor = edges.find(([, to]) => to === makeup)[0];
-      const mixer = edges.find(([, to]) => to === compressor)[0];
+      const highShelf = edges.find(([, to]) => to === makeup)[0];
+      const lowShelf = edges.find(([, to]) => to === highShelf)[0];
+      const compressor = edges.find(([, to]) => to === lowShelf)[0];
+      const inputGain = edges.find(([, to]) => to === compressor)[0];
+      const mixer = edges.find(([, to]) => to === inputGain)[0];
       const voiceInputs = edges.filter(([, to]) => to === mixer);
       const graph = {
         contextOptions: window.contextOptions,
         outputs: outputs.length,
-        stages: [mixer, compressor, makeup, compensation, limiter, softClip, ceiling].map(node => node.constructor.name),
+        stages: [mixer, inputGain, compressor, lowShelf, highShelf, makeup, compensation, limiter, softClip, ceiling].map(node => node.constructor.name),
         mixerGain: mixer.gain.value,
+        inputGain: inputGain.gain.value,
         makeupGain: makeup.gain.value,
         oversample: [softClip.oversample, ceiling.oversample],
         voices: voiceInputs.length,
@@ -90,8 +94,9 @@ for (const sampleRate of [44100, 48000]) {
     expect(result.graph).toEqual({
       contextOptions: { latencyHint: 'interactive' },
       outputs: 1,
-      stages: ['GainNode', 'DynamicsCompressorNode', 'GainNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
+      stages: ['GainNode', 'GainNode', 'DynamicsCompressorNode', 'BiquadFilterNode', 'BiquadFilterNode', 'GainNode', 'GainNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'WaveShaperNode'],
       mixerGain: 0.5,
+      inputGain: 1,
       oversample: ['4x', 'none'],
       voices: 56,
       voiceOutputs: true,

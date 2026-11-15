@@ -18,6 +18,7 @@ async function openSynth(page) {
     };
     window.oscillators = [];
     window.filters = [];
+    window.shelves = [];
     window.ramps = [];
     window.detuneRamps = [];
     window.stops = [];
@@ -45,11 +46,13 @@ async function openSynth(page) {
     };
     const connect = AudioNode.prototype.connect;
     AudioNode.prototype.connect = function (destination, ...args) {
+      if (this instanceof GainNode && destination instanceof DynamicsCompressorNode && destination.threshold.value === -30) window.compressorInputGain = this.gain;
       if (this instanceof GainNode && destination instanceof WaveShaperNode) window.saturationDrive = this.gain;
       if (destination instanceof StereoPannerNode && this instanceof GainNode) {
         window.voiceTone = this.gain;
         window.voicePan = destination.pan;
       }
+      if (this instanceof BiquadFilterNode && ['lowshelf', 'highshelf'].includes(this.type)) window.shelves.push(this);
       if (destination instanceof GainNode) {
         if (this instanceof ConvolverNode) window.reverbReturn = destination.gain;
         if (this instanceof WaveShaperNode) window.saturationReturn = destination.gain;
@@ -117,7 +120,7 @@ test('uses the requested defaults and holds sustain at relative dB until release
     await expect(page.locator(`#${id} input`)).toHaveValue(value);
   }
   await expect(page.getByText('Sustain', { exact: true })).toBeVisible();
-  for (const [id, max] of [['attack', '1000'], ['decay', '3000'], ['voices', '32']]) {
+  for (const [id, max] of [['attack', '1000'], ['decay', '5000'], ['voices', '32']]) {
     await expect(page.locator(`#${id} input`)).toHaveAttribute('max', max);
   }
   await page.locator('#instrument').focus();
@@ -302,15 +305,15 @@ test('sustain knob supports decimal values and updates the native envelope', asy
   await page.keyboard.up('y');
 });
 
-test('uses ten knobs with labels below and ADSR on the bottom row', async ({ page }) => {
+test('uses fifteen knobs with labels below and ADSR on the bottom row', async ({ page }) => {
   await openSynth(page);
   const controls = page.getByRole('group', { name: 'Audio parameters' });
-  await expect(controls.getByRole('slider')).toHaveCount(10);
+  await expect(controls.getByRole('slider')).toHaveCount(15);
   await expect(controls.locator('.parameter_label')).toHaveText([
-    'Oscillator', 'Frequency', 'Resonance', 'Warmth', 'Space', 'Voices', 'Attack', 'Decay', 'Sustain', 'Release',
+    'Oscillator', 'Frequency', 'Resonance', 'Warmth', 'Space', 'Brightness', 'Variance', 'Seed', 'Voices', 'Transpose', 'Attack', 'Decay', 'Sustain', 'Release', 'Gain',
   ]);
   await expect(controls.locator('.parameter_value')).toHaveText([
-    'Triangle', '440 Hz', '0.7', '25%', '25%', '8', '9 ms', '900 ms', '-12 dB', '2200 ms',
+    'Triangle', '440 Hz', '0.7', '25%', '25%', '0%', '0%', '0', '8', '0 st', '9 ms', '900 ms', '-12 dB', '2200 ms', '0 dB',
   ]);
   await expect(controls.locator('input[type="number"], select, .parameter_fader')).toHaveCount(0);
   const layout = await controls.locator('.audio_parameter').evaluateAll(items => items.map(item => ({
@@ -319,10 +322,10 @@ test('uses ten knobs with labels below and ADSR on the bottom row', async ({ pag
     knobBottom: item.querySelector('.knob_control').getBoundingClientRect().bottom,
     labelTop: item.querySelector('.parameter_label').getBoundingClientRect().top,
   })));
-  expect(layout.map(item => item.id)).toEqual(['oscillator', 'frequency', 'resonance', 'warmth', 'space', 'voices', 'attack', 'decay', 'sustain', 'release']);
+  expect(layout.map(item => item.id)).toEqual(['oscillator', 'frequency', 'resonance', 'warmth', 'space', 'brightness', 'variance', 'seed', 'voices', 'transpose', 'attack', 'decay', 'sustain', 'release', 'gain']);
   expect(new Set(layout.slice(0, 5).map(item => item.y)).size).toBe(1);
-  expect(new Set(layout.slice(5).map(item => item.y)).size).toBe(1);
-  expect(layout[5].y).toBeGreaterThan(layout[0].y);
+  expect(new Set(layout.slice(10).map(item => item.y)).size).toBe(1);
+  expect(layout[10].y).toBeGreaterThan(layout[0].y);
   for (const item of layout) expect(item.labelTop).toBeGreaterThanOrEqual(item.knobBottom);
   const oscillator = page.getByRole('slider', { name: 'Oscillator', exact: true });
   await oscillator.focus();
@@ -388,3 +391,103 @@ for (const [release, noteOff] of [[0, .005], [50, .9], [2200, 3]]) {
     expect(result.stops.map(stop => stop.time)).toEqual([result.envelope.time, result.envelope.time]);
   });
 }
+
+test('transposes held voices and tracks their filter cutoff', async ({ page }) => {
+  await openSynth(page);
+  await pressPiano(page, 69);
+  for (const transpose of [24, -24, 0]) {
+    await setKnob(page, 'transpose', transpose);
+    const actual = await page.evaluate(() => ({
+      cents: window.oscillators.map(node => window.parameterValues.get(node.detune)),
+      cutoff: window.parameterValues.get(window.filters[0].frequency),
+    }));
+    expect(actual.cents).toEqual([transpose * 100, transpose * 100]);
+    expect(actual.cutoff).toBeCloseTo(440 * 2 ** (transpose / 12), 5);
+  }
+});
+
+test('replays seeded velocity jitter and keeps extreme velocities positive', async ({ page }) => {
+  await openSynth(page);
+  await setKnob(page, 'variance', 100);
+  async function sequence(seed) {
+    await setKnob(page, 'seed', seed);
+    await page.evaluate(() => { window.ramps = []; });
+    for (const pitch of [69, 70, 71]) {
+      await pressPiano(page, pitch);
+      await page.locator(`.piano_keys .key_${pitch}`).dispatchEvent('pointerup', { pointerId: pitch });
+    }
+    return page.evaluate(() => window.ramps.filter(point => point.time > 0 && point.time < 0.02).map(point => point.value));
+  }
+  const first = await sequence(123);
+  expect(first).toHaveLength(3);
+  const other = await sequence(999);
+  expect(other).not.toEqual(first);
+  expect(await sequence(123)).toEqual(first);
+  for (const gain of [...first, ...other]) {
+    expect(gain).toBeGreaterThan(0);
+    expect(gain).toBeLessThanOrEqual(127 / 64 / 12);
+  }
+});
+
+
+test('balances brightness shelves across the full range', async ({ page }) => {
+  await openSynth(page);
+  for (const brightness of [100, -100, 50, -50, 0]) {
+    await setKnob(page, 'brightness', brightness);
+    const shelves = await page.evaluate(() => window.shelves.map(node => ({
+      type: node.type, frequency: node.frequency.value,
+      gain: window.parameterValues.get(node.gain) ?? node.gain.value,
+    })));
+    expect(shelves).toEqual([
+      { type: 'lowshelf', frequency: 400, gain: -brightness * 24 / 100 },
+      { type: 'highshelf', frequency: 2000, gain: brightness * 24 / 100 },
+    ]);
+  }
+});
+
+
+test('scales seeded attack jitter with variance', async ({ page }) => {
+  await openSynth(page);
+  await setKnob(page, 'attack', 100);
+  async function sequence(variance) {
+    await setKnob(page, 'variance', variance);
+    await setKnob(page, 'seed', 999);
+    await setKnob(page, 'seed', 123);
+    await page.evaluate(() => { window.ramps = []; });
+    for (const pitch of [69, 70, 71, 72]) {
+      await pressPiano(page, pitch);
+      await page.locator(`.piano_keys .key_${pitch}`).dispatchEvent('pointerup', { pointerId: pitch });
+    }
+    return page.evaluate(() => window.ramps.filter(point => point.time > 0 && point.time < 0.2)
+      .map(point => (point.time - 0.00001) * 1000));
+  }
+  const full = await sequence(100);
+  expect(full).toHaveLength(4);
+  for (const attack of full) {
+    expect(attack).toBeGreaterThanOrEqual(75);
+    expect(attack).toBeLessThanOrEqual(125);
+  }
+  expect(full.some(attack => attack < 100)).toBe(true);
+  expect(full.some(attack => attack > 100)).toBe(true);
+  expect(await sequence(100)).toEqual(full);
+  const half = await sequence(50);
+  half.forEach((attack, index) => expect(attack).toBeCloseTo(100 + (full[index] - 100) / 2, 8));
+  for (const attack of await sequence(0)) expect(attack).toBeCloseTo(100, 8);
+  await setKnob(page, 'attack', 0);
+  for (const attack of await sequence(100)) expect(attack).toBeCloseTo(0, 8);
+});
+
+
+test('sets gain before the mix compressor in decibels and resets to unity', async ({ page }) => {
+  await openSynth(page);
+  const knob = page.locator('#gain input[type="range"]');
+  await expect(knob).toHaveAttribute('min', '-12');
+  await expect(knob).toHaveAttribute('max', '12');
+  await expect(page.locator('#gain .parameter_value')).toHaveText('0 dB');
+  for (const db of [-12, 12, 0.1, 0]) {
+    await setKnob(page, 'gain', db);
+    const amplitude = await page.evaluate(() =>
+      window.parameterValues.get(window.compressorInputGain) ?? window.compressorInputGain.value);
+    expect(amplitude).toBeCloseTo(10 ** (db / 20), 6);
+  }
+});

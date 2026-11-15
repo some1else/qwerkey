@@ -126,7 +126,7 @@ playback, including silence after the last note. Stop, then play a new phrase to
 capture another loop; starting playback without new notes reuses the existing
 region. Manually drawing, adjusting, or clearing the region takes over from this
 automatic capture for the current phrase.
-The Buffer tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Buffer fits the current loop region to the viewport and retains the
+The Melody tab is available above 667 px; recording and the Space playback shortcut remain available on mobile. Opening Melody fits the current loop region to the viewport and retains the
 output selected through Audio or Midi. Reloading the page resets
 the buffer. Synth release tails and sound settings are not part of MIDI data.
 
@@ -149,4 +149,4 @@ loop changes, note edits, and output changes; Space also works from the instrume
 the browser keeps playback running and releases held live notes. Leaving the page stops playback. Avoid routing a MIDI output back to
 the selected input, since external feedback is indistinguishable from live input.
 
-The Buffer toolbar provides Play loop, Stop, Clear buffer (with confirmation), Download, and Fit. Download saves selected notes first, otherwise the loop range, otherwise the entire buffer as MIDI. Fit trims unused trailing duration and frames the loop or buffer. The shared Output controls remain below both views. Audio parameters use two rows of four; Midi ports stack IN above OUT. Numeric fields support direct entry and keyboard adjustment without visible spinner arrows. Active notes, including buffer playback, highlight the computer keyboard.
+The Melody toolbar provides Play loop, Stop, Clear buffer (with confirmation), Download, and Fit. Download saves selected notes first, otherwise the loop range, otherwise the entire buffer as MIDI. Fit trims unused trailing duration and frames the loop or buffer. Synth and MIDI tabs combine the keyboard with their respective output controls. Melody opens the editor and retains the selected output for playback. Synth parameters use three rows of five; MIDI ports stack IN above OUT. Numeric fields support direct entry and keyboard adjustment without visible spinner arrows. Active notes, including buffer playback, highlight the computer keyboard.

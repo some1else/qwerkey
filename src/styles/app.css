@@ -407,20 +407,16 @@ a {
 .roll_boundary::before { content: ''; position: absolute; top: 0; width: 10px; height: 6px; border-top: 2px solid #e49b26; }
 .roll_boundary_end::before { right: 0; }
 
-/* View navigation and output selection share the existing segmented styling. */
+/* Instrument view navigation and controls. */
 .output_controls {
   display: grid;
-  grid-template-columns: auto 24rem;
+  grid-template-columns: minmax(0, 24rem);
   align-items: center;
   justify-content: center;
   gap: 3rem;
   margin: 2rem auto 0;
   padding: 0 1rem;
 }
-.output_choice { display: grid; }
-.output_switch { flex-direction: column; margin: 0; }
-.output_switch button:first-child { border-radius: .375rem .375rem 0 0; }
-.output_switch button:last-child { border-radius: 0 0 .375rem .375rem; margin-left: 0; margin-top: -1px; }
 .sound_controls { width: 100%; max-width: none; margin: 0; padding: 0; min-height: 17rem; align-items: center; }
 .audio_parameters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem .5rem; }
 .midi_ports { display: grid; grid-template-columns: 1fr; gap: 1rem; padding: 0; }

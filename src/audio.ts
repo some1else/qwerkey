@@ -1,6 +1,11 @@
 export interface SynthParameters {
   oscillator: OscillatorType;
   voices: number;
+  gain: number;
+  brightness: number;
+  variance: number;
+  transpose: number;
+  seed: number;
   attack: number;
   decay: number;
   sustain: number;
@@ -30,7 +35,7 @@ function warmthOutputGain(percent: number): number {
 }
 
 export const defaultParameters: SynthParameters = {
-  oscillator: 'triangle', voices: 8, attack: 9, decay: 900, sustain: -12,
+  oscillator: 'triangle', voices: 8, gain: 0, brightness: 0, variance: 0, transpose: 0, seed: 0, attack: 9, decay: 900, sustain: -12,
   release: 2200, frequency: 440, resonance: 0.7, warmth: effectReference, space: effectReference,
 };
 
@@ -134,8 +139,19 @@ function createMixer(context: AudioContext, parameters: SynthParameters) {
   ceiling.curve = new Float32Array([-peak, 0, peak]);
   ceiling.oversample = 'none';
 
-  mixer.connect(compressor);
-  compressor.connect(makeup);
+  // Native shelves have smooth transitions; their Q parameter is unused.
+  const lowShelf = context.createBiquadFilter();
+  lowShelf.type = 'lowshelf';
+  lowShelf.frequency.value = 400;
+  const highShelf = context.createBiquadFilter();
+  highShelf.type = 'highshelf';
+  highShelf.frequency.value = 2000;
+  const inputGain = context.createGain();
+  mixer.connect(inputGain);
+  inputGain.connect(compressor);
+  compressor.connect(lowShelf);
+  lowShelf.connect(highShelf);
+  highShelf.connect(makeup);
   const warmthCompensation = context.createGain();
   makeup.connect(warmthCompensation);
   warmthCompensation.connect(limiter);
@@ -177,7 +193,11 @@ function createMixer(context: AudioContext, parameters: SynthParameters) {
   softClip.connect(ceiling);
   ceiling.connect(context.destination);
   function setParameters(parameters: SynthParameters, smooth = true) {
+    const brightnessGain = 24 * parameters.brightness / 100;
     for (const [param, value] of [
+      [inputGain.gain, 10 ** (parameters.gain / 20)],
+      [lowShelf.gain, -brightnessGain],
+      [highShelf.gain, brightnessGain],
       [warmthCompensation.gain, warmthOutputGain(parameters.warmth)],
       [saturationDrive.gain, 10 ** (effectAmount(parameters.warmth, 0, 30) / 20)],
       [saturationReturn.gain, effectAmount(parameters.warmth, 0.06, 1)],
@@ -196,6 +216,7 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
     const oscillator = context.createOscillator();
     oscillator.type = settings.oscillator;
     oscillator.frequency.value = frequency;
+    oscillator.detune.value = settings.transpose * 100;
     return { oscillator, direction };
   });
   // The coherent unison pair has the same level as the original single voice.
@@ -218,7 +239,7 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
   const highNoteDb = Math.min(12, Math.max(0, rootNote - 69) * 3 / 12);
   const tone = context.createGain();
   tone.gain.value = 10 ** (-highNoteDb * settings.warmth / effectReference / 20);
-  const volume = voiceLevel * velocity / 64;
+  const volume = Math.max(0.000001, voiceLevel * velocity / 64);
   const sustain = volume * 10 ** (settings.sustain / 20);
   // Tiny offsets keep zero-duration envelope stages ordered.
   const points = [
@@ -235,9 +256,12 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
   let warmth = settings.warmth;
   let spaceChanged = false;
   function tune(parameters: SynthParameters) {
-    for (const { oscillator } of oscillators) oscillator.type = parameters.oscillator;
+    for (const { oscillator } of oscillators) {
+      oscillator.type = parameters.oscillator;
+      oscillator.detune.setTargetAtTime(parameters.transpose * 100, context.currentTime, 0.015);
+    }
     // 440 is unity key tracking: every voice follows its own root frequency.
-    filter.frequency.setValueAtTime(Math.min(context.sampleRate / 2, frequency * parameters.frequency / 440), context.currentTime);
+    filter.frequency.setValueAtTime(Math.min(context.sampleRate / 2, frequency * 2 ** (parameters.transpose / 12) * parameters.frequency / 440), context.currentTime);
     // Lowpass Q is expressed in dB by Web Audio; expose traditional linear Q.
     filter.Q.setValueAtTime(20 * Math.log10(parameters.resonance), context.currentTime);
     if (parameters.warmth !== warmth) {
@@ -329,6 +353,20 @@ function startVoice(context: AudioContext, output: AudioNode, frequency: number,
   };
 }
 
+// Hash arrangement microseconds before sampling, so nearby notes do not share
+// correlated LCG values. Wall-clock timing and loop iteration never enter here.
+export function arrangementRandom(seed: number, time: number): () => number {
+  const ticks = Math.round(time * 1_000_000);
+  let state = (ticks ^ Math.floor(ticks / 2 ** 32) ^ seed) >>> 0;
+  state = Math.imul(state ^ (state >>> 16), 0x7feb352d);
+  state = Math.imul(state ^ (state >>> 15), 0x846ca68b);
+  state = (state ^ (state >>> 16)) >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 2 ** 32;
+  };
+}
+
 export function createSynth() {
   let parameters = { ...defaultParameters };
   let context: AudioContext | undefined;
@@ -336,6 +374,11 @@ export function createSynth() {
   const heldNotes = new Map<number, Voice>();
   const activeVoices = new Set<Voice>();
   let disposed = false;
+  let randomState = parameters.seed;
+  function random() {
+    randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
+    return randomState / 2 ** 32;
+  }
 
   function stealOldest() {
     const held = new Set(heldNotes.values());
@@ -361,10 +404,15 @@ export function createSynth() {
     if (context.state !== 'running') throw new Error('Audio is suspended');
   }
 
-  function play(key: number, frequency: number, velocity = 64) {
+  function play(key: number, frequency: number, velocity = 64, arrangementTime?: number) {
     if (!context || !mixer || context.state !== 'running' || heldNotes.has(key)) return;
     while (activeVoices.size >= parameters.voices) stealOldest();
-    const voice = startVoice(context, mixer.input, frequency, { ...parameters }, () => activeVoices.delete(voice), velocity);
+    const noteRandom = arrangementTime === undefined ? random : arrangementRandom(parameters.seed, arrangementTime);
+    // Playback samples depend only on seed and arrangement time; live notes use the sequence.
+    const variedVelocity = Math.max(0, Math.min(127,
+      velocity + (noteRandom() - 0.5) * parameters.variance / 100 * 127));
+    const variedAttack = parameters.attack * (1 + (noteRandom() - 0.5) * parameters.variance / 100 * 0.5);
+    const voice = startVoice(context, mixer.input, frequency, { ...parameters, attack: variedAttack }, () => activeVoices.delete(voice), variedVelocity);
     activeVoices.add(voice);
     heldNotes.set(key, voice);
   }
@@ -376,6 +424,7 @@ export function createSynth() {
 
   function setParameters(next: Partial<SynthParameters>) {
     if (next.voices !== undefined && (!Number.isInteger(next.voices) || next.voices < 1 || next.voices > 32)) return;
+    if (next.seed !== undefined && next.seed !== parameters.seed) randomState = next.seed;
     parameters = { ...parameters, ...next };
     mixer?.setParameters(parameters);
     while (activeVoices.size > parameters.voices) stealOldest();

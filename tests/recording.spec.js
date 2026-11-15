@@ -140,9 +140,9 @@ test("buffer records live notes and loops without recording itself", async ({
   await page.keyboard.down("y");
   await page.waitForTimeout(180);
   await page.keyboard.up("y");
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   const buffer = page.getByRole("region", {
-    name: "Recorded buffer",
+    name: "Recorded melody",
     exact: true,
   });
   await expect(buffer).toHaveAttribute("data-note-count", "1");
@@ -195,7 +195,7 @@ test("MIDI input retains channel and velocities during loop playback", async ({
   await page.evaluate(() => window.receive([0x95, 127, 101]));
   await page.waitForTimeout(250);
   await page.evaluate(() => window.receive([0x85, 127, 33]));
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   await expect(page.locator(".recorded_buffer")).toHaveAttribute(
     "data-note-count",
     "1",
@@ -230,7 +230,7 @@ test("editor selection, move, delete, range and tab navigation do not trigger li
   await page.keyboard.down("y");
   await page.waitForTimeout(100);
   await page.keyboard.up("y");
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   const note = page.locator(".roll_note");
   await note.click();
   await page.keyboard.press("ArrowRight");
@@ -244,17 +244,17 @@ test("editor selection, move, delete, range and tab navigation do not trigger li
     "data-note-count",
     "0",
   );
-  await page.getByRole("tab", { name: "Buffer", exact: true }).focus();
+  await page.getByRole("tab", { name: "Melody", exact: true }).focus();
   await page.keyboard.press("Home");
   await expect(
-    page.getByRole("tab", { name: "Keyboard", exact: true }),
+    page.getByRole("tab", { name: "Synth", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await expect(page.locator('#audio-mode')).toBeFocused();
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('#buffer-mode')).toBeFocused();
   await expect(page.locator('#buffer-mode')).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowRight');
-  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await expect(page.locator('#audio-mode')).toBeFocused();
   await page.keyboard.press('End');
   await expect(page.locator('#buffer-mode')).toBeFocused();
   await expect(page.locator('.recorded_buffer')).toHaveAttribute('data-note-count', '0');
@@ -270,7 +270,7 @@ test("note edges lengthen and shorten individual notes while the body still move
     await page.keyboard.up(key);
     await page.waitForTimeout(80);
   }
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   const notes = page.locator(".roll_note");
   await expect(notes).toHaveCount(2);
   await expect.poll(async () => (await notes.nth(1).boundingBox())?.width ?? 0).toBeGreaterThan(100);
@@ -380,7 +380,7 @@ test("ruler draws, moves and resizes the loop without editing notes", async ({ p
   await page.goto("./");
   await page.locator("#enabler").click();
   await page.keyboard.press("y");
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   const start = edge(page, "start");
   const end = edge(page, "end");
   const ruler = page.locator(".roll_ruler");
@@ -438,7 +438,7 @@ test("loop handles remain usable at low zoom and ruler touch drawing survives sc
   await page.setViewportSize({ width: 800, height: 900 });
   await page.goto("./");
   await page.locator("#enabler").click();
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   const start = edge(page, "start");
   const end = edge(page, "end");
   await end.fill("5");
@@ -491,14 +491,14 @@ test("playback survives tabs, edits and Space toggles", async ({ page }) => {
   await page.keyboard.down("y");
   await page.waitForTimeout(150);
   await page.keyboard.up("y");
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   await edge(page, "end").fill("1");
   await page.locator(".roll_viewport").focus();
   await page.keyboard.press("Space");
-  await page.getByRole("tab", { name: "Keyboard", exact: true }).click();
+  await page.getByRole("tab", { name: "Synth", exact: true }).click();
   const starts = await page.evaluate(() => window.playbackStarts);
   await page.waitForFunction(before => window.playbackStarts > before, starts);
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.locator(".roll_note").click();
   await page.keyboard.press("Shift+ArrowUp");
@@ -556,7 +556,7 @@ test("grid selection transposes the whole group once and preserves metadata", as
   await page.waitForTimeout(100);
   await page.keyboard.up("y");
   await page.keyboard.up("u");
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   await expect(page.locator('.roll_note')).toHaveCount(2);
   const positions = () => page.locator('.roll_note').evaluateAll(items => items.map(item => parseFloat(getComputedStyle(item).top)));
   const before = await positions();
@@ -642,7 +642,7 @@ test("incoming MIDI is recorded at the looping playhead even on a hidden editor"
   await edge(page, "start").fill("0.5");
   await page.locator(".roll_viewport").focus();
   await page.keyboard.press("Space");
-  await page.locator("#keyboard-mode").click();
+  await page.locator("#midi-mode").click();
   await page.evaluate(() => window.receive([0x93, 74, 101]));
   await page.waitForTimeout(120);
   await page.evaluate(() => window.receive([0x83, 74, 33]));
@@ -723,7 +723,7 @@ test("synth plays a live overdub on subsequent passes without restarting", async
   await edge(page, "end").fill("0.8");
   await page.locator(".roll_viewport").focus();
   await page.keyboard.press("Space");
-  await page.locator("#keyboard-mode").click();
+  await page.locator("#audio-mode").click();
   await page.locator("#instrument").focus();
   await page.keyboard.down("u");
   await page.waitForTimeout(150);
@@ -767,7 +767,7 @@ test("hidden recording avoids editor DOM and Space plays fresh capture", async (
   await page.keyboard.press("Space");
   await expect(page.locator(".recorded_buffer")).toHaveAttribute("data-playing", "true");
   await page.keyboard.press("Space");
-  await page.getByRole("tab", { name: "Buffer", exact: true }).click();
+  await page.getByRole("tab", { name: "Melody", exact: true }).click();
   await expect.poll(() => page.locator('.roll_viewport').evaluate(element => {
     const start = Number(element.querySelector('.roll_loop_start input').value);
     const end = Number(element.querySelector('.roll_loop_end input').value);
@@ -864,7 +864,7 @@ test("Space closes stopped phrases at the gesture, including silence, and rearms
   await page.keyboard.press("Space");
   await page.keyboard.press("Space");
   expect(Number(await edge(page, "end").inputValue())).toBe(firstEnd);
-  await page.locator("#keyboard-mode").click();
+  await page.locator("#audio-mode").click();
   await page.locator("#instrument").focus();
   await page.waitForTimeout(150);
   await page.keyboard.down("u");

@@ -12,6 +12,7 @@ export interface HeldNote {
   velocity?: number;
   releaseVelocity?: number;
   origin?: "playback" | "preview";
+  arrangementTime?: number;
   mapping?: KeyMapping;
 }
 export interface Snapshot {
@@ -113,10 +114,10 @@ export function createController() {
     },
     (ports) => publish({ ports }),
   );
-  function send(pitch: number, active: boolean, channel = 0, velocity = 64) {
+  function send(pitch: number, active: boolean, channel = 0, velocity = 64, arrangementTime?: number) {
     if (state.mode === "midi") midi.sendNote(pitch, active, channel, velocity);
     else if (active)
-      synth.play(pitch, 440 * 2 ** ((pitch - 69) / 12), velocity);
+      synth.play(pitch, 440 * 2 ** ((pitch - 69) / 12), velocity, arrangementTime);
     else synth.release(pitch);
   }
   const sameOutput = (a: HeldNote, b: HeldNote) =>
@@ -172,7 +173,7 @@ export function createController() {
         )
       )
         recording.start(`local:${note.pitch}`, note.pitch);
-      if (!sounding) send(note.pitch, true, note.channel, note.velocity);
+      if (!sounding) send(note.pitch, true, note.channel, note.velocity, note.arrangementTime);
       refresh();
     },
     release(source: string) {
