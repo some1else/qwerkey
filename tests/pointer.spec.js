@@ -191,16 +191,16 @@ test('two piano touch owners of one pitch release independently', async ({ brows
   await context.close();
 });
 
-test('buffer tab hides on mobile and resize returns focus to the Keyboard tab', async ({ page }) => {
+test('Melody tab hides on mobile and resize returns focus to Synth', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 900 });
   await page.locator('#enabler').click();
   await page.locator('#buffer-mode').click();
   await page.locator('.roll_loop_start input').focus();
   await page.setViewportSize({ width: 667, height: 900 });
   await expect(page.locator('#buffer-mode')).toBeHidden();
-  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await expect(page.locator('#audio-mode')).toBeFocused();
   await page.keyboard.press('End');
-  await expect(page.locator('#keyboard-mode')).toBeFocused();
+  await expect(page.locator('#midi-mode')).toBeFocused();
   for (const width of [375, 666, 667, 668]) {
     await page.setViewportSize({ width, height: 900 });
     if (width <= 667) await expect(page.locator('#buffer-mode')).toBeHidden();
