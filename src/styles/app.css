@@ -308,13 +308,6 @@ a {
   color: #999;
   font-size: .75rem;
 }
-@media (width > 667px) {
-  .sound_controls > [hidden] {
-    display: flex !important;
-    visibility: hidden;
-  }
-}
-
 @media (max-width: 667px) {
 	.mode_switch { display: flex; }
 	.computer_keys { margin-top: 0; }
@@ -422,7 +415,8 @@ a {
 .midi_ports { display: grid; grid-template-columns: 1fr; gap: 1rem; padding: 0; }
 .midi_port { display: grid; grid-template-columns: 2rem minmax(0, 1fr); text-align: right; }
 @media (width > 667px) {
-  .sound_controls > [hidden] { display: none !important; }
+  /* Reserve the taller panel's space so switching modes keeps the keys still. */
+  .sound_controls > [hidden] { display: grid !important; visibility: hidden; }
 }
 @media (max-width: 667px) {
   .output_controls { gap: 2rem; margin-top: 1rem; }

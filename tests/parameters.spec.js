@@ -57,7 +57,7 @@ async function openSynth(page) {
         if (this instanceof ConvolverNode) window.reverbReturn = destination.gain;
         if (this instanceof WaveShaperNode) window.saturationReturn = destination.gain;
       }
-      if (this instanceof BiquadFilterNode && destination instanceof GainNode) {
+      if (this instanceof BiquadFilterNode && this.type === 'lowpass' && destination instanceof GainNode) {
         window.filters.push(this);
         window.voiceGain = destination.gain;
       }
@@ -412,11 +412,15 @@ test('replays seeded velocity jitter and keeps extreme velocities positive', asy
   async function sequence(seed) {
     await setKnob(page, 'seed', seed);
     await page.evaluate(() => { window.ramps = []; });
+    const attacks = [];
     for (const pitch of [69, 70, 71]) {
       await pressPiano(page, pitch);
+      // The new voice schedules initial, attack and decay points. Read its
+      // attack before note-off or voice stealing can add unrelated ramps.
+      attacks.push(await page.evaluate(() => window.ramps.at(-2).value));
       await page.locator(`.piano_keys .key_${pitch}`).dispatchEvent('pointerup', { pointerId: pitch });
     }
-    return page.evaluate(() => window.ramps.filter(point => point.time > 0 && point.time < 0.02).map(point => point.value));
+    return attacks;
   }
   const first = await sequence(123);
   expect(first).toHaveLength(3);
@@ -454,12 +458,13 @@ test('scales seeded attack jitter with variance', async ({ page }) => {
     await setKnob(page, 'seed', 999);
     await setKnob(page, 'seed', 123);
     await page.evaluate(() => { window.ramps = []; });
+    const attacks = [];
     for (const pitch of [69, 70, 71, 72]) {
       await pressPiano(page, pitch);
+      attacks.push(await page.evaluate(() => (window.ramps.at(-2).time - 0.00001) * 1000));
       await page.locator(`.piano_keys .key_${pitch}`).dispatchEvent('pointerup', { pointerId: pitch });
     }
-    return page.evaluate(() => window.ramps.filter(point => point.time > 0 && point.time < 0.2)
-      .map(point => (point.time - 0.00001) * 1000));
+    return attacks;
   }
   const full = await sequence(100);
   expect(full).toHaveLength(4);

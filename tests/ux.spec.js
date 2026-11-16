@@ -19,7 +19,7 @@ for (const width of [1000, 668]) {
     }));
     expect(controls).toHaveLength(15);
     expect(new Set(controls.map(item => item.x)).size).toBe(5);
-    expect(new Set(controls.map(item => item.y)).size).toBe(2);
+    expect(new Set(controls.map(item => item.y)).size).toBe(3);
     await setKnob(page, 'attack', 123);
     await page.screenshot({ path: `/tmp/qwerkey-just-play-${width}.png` });
     await page.locator('#midi-mode').click();
